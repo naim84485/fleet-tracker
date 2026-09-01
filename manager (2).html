@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ম্যানেজার ড্যাশবোর্ড — লাইভ ফ্লিট</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root{
+    --bg:#0F172A;
+    --surface:#16213A;
+    --surface-2:#1E293B;
+    --accent:#F59E0B;
+    --text:#E2E8F0;
+    --text-muted:#8CA0BE;
+    --on:#10B981;
+    --stale:#F59E0B;
+    --off:#EF4444;
+    --border: rgba(148,163,184,0.15);
+  }
+
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;}
+  body{
+    font-family:'Inter',sans-serif;
+    color:var(--text);
+    background:var(--bg);
+    display:flex;
+    height:100vh;
+    overflow:hidden;
+  }
+
+  /* ---- Sidebar: dispatch board ---- */
+  #sidebar{
+    width:320px;
+    flex-shrink:0;
+    background:var(--surface);
+    border-right:1px solid var(--border);
+    display:flex;
+    flex-direction:column;
+    overflow-y:auto;
+  }
+
+  #sidebar-header{
+    padding:24px 20px 16px 20px;
+    border-bottom:1px solid var(--border);
+  }
+
+  .eyebrow{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.14em;
+    color:var(--accent);
+    text-transform:uppercase;
+    margin-bottom:4px;
+  }
+
+  h1{
+    font-family:'Barlow Condensed',sans-serif;
+    font-weight:700;
+    font-size:26px;
+    margin:0;
+    text-transform:uppercase;
+    letter-spacing:0.01em;
+  }
+
+  #summary{
+    font-size:13px;
+    color:var(--text-muted);
+    margin-top:6px;
+  }
+
+  #driver-list{
+    padding:8px 12px;
+    flex:1;
+  }
+
+  .driver-card{
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:14px 16px;
+    margin-bottom:10px;
+    cursor:pointer;
+    transition:border-color 0.15s ease;
+  }
+  .driver-card:hover{ border-color:var(--accent); }
+  .driver-card.active-selected{ border-color:var(--accent); background:#22304F; }
+
+  .driver-top{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+  }
+
+  .driver-name{
+    font-family:'Barlow Condensed',sans-serif;
+    font-weight:700;
+    font-size:18px;
+    letter-spacing:0.01em;
+  }
+
+  .dot{
+    width:9px;height:9px;border-radius:50%;
+    flex-shrink:0;
+  }
+  .dot.on{ background:var(--on); box-shadow:0 0 0 0 rgba(16,185,129,0.55); animation:pulse 1.8s infinite; }
+  .dot.stale{ background:var(--stale); }
+  .dot.off{ background:var(--off); }
+
+  @keyframes pulse{
+    0%{box-shadow:0 0 0 0 rgba(16,185,129,0.55);}
+    70%{box-shadow:0 0 0 8px rgba(16,185,129,0);}
+    100%{box-shadow:0 0 0 0 rgba(16,185,129,0);}
+  }
+
+  .driver-meta{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11.5px;
+    color:var(--text-muted);
+    margin-top:6px;
+  }
+
+  .empty-state{
+    padding:20px 16px;
+    color:var(--text-muted);
+    font-size:13px;
+    text-align:center;
+    line-height:1.6;
+  }
+
+  /* ---- Map ---- */
+  #map{ flex:1; height:100%; }
+
+  .marker-pin{
+    width:34px; height:34px;
+    border-radius:50% 50% 50% 0;
+    background:var(--accent);
+    transform:rotate(-45deg);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    box-shadow:0 4px 10px rgba(0,0,0,0.4);
+    border:2px solid #0F172A;
+  }
+  .marker-pin.stale{ background:var(--text-muted); }
+  .marker-label{
+    transform:rotate(45deg);
+    font-family:'Barlow Condensed',sans-serif;
+    font-weight:700;
+    font-size:13px;
+    color:#1A1200;
+  }
+
+  .leaflet-popup-content-wrapper{
+    background:var(--surface-2);
+    color:var(--text);
+    border-radius:10px;
+  }
+  .leaflet-popup-tip{ background:var(--surface-2); }
+  .popup-title{ font-family:'Barlow Condensed',sans-serif; font-size:18px; font-weight:700; margin-bottom:4px; }
+  .popup-meta{ font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--text-muted); }
+
+  .setup-banner{
+    position:absolute; top:16px; left:340px; right:16px;
+    background:var(--off); color:#fff; padding:12px 18px;
+    border-radius:10px; font-size:13px; z-index:1000;
+    display:none;
+  }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div id="sidebar-header">
+    <div class="eyebrow">ফ্লিট ট্র্যাকার · ম্যানেজার</div>
+    <h1>লাইভ ড্রাইভার</h1>
+    <div id="summary">লোড হচ্ছে...</div>
+  </div>
+  <div id="driver-list"></div>
+</div>
+
+<div id="map"></div>
+<div class="setup-banner" id="setupBanner">⚠ firebaseConfig বসানো হয়নি — নিচের script অংশে বসান।</div>
+
+<script>
+  // ================================================================
+  // driver.html-এর মতো একই Firebase কনফিগারেশন এখানে বসান।
+  // ================================================================
+  const firebaseConfig = {
+    apiKey: "AIzaSyBuu25ZYUGJWiayqzMTUavodF-rcMVFrCk",
+    authDomain: "t-eran-2d426.firebaseapp.com",
+    databaseURL: "https://t-eran-2d426-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "t-eran-2d426",
+    storageBucket: "t-eran-2d426.firebasestorage.app",
+    messagingSenderId: "256100312636",
+    appId: "1:256100312636:web:5e2d234a8b9ffff2e20539",
+    measurementId: "G-PMC6W971RS"
+  };
+  // ================================================================
+
+  const STALE_AFTER_MS = 60 * 1000;   // ৬০ সেকেন্ড আপডেট না এলে "স্টেইল" ধরা হবে
+  const OFFLINE_AFTER_MS = 5 * 60 * 1000; // ৫ মিনিট আপডেট না এলে "অফলাইন"
+
+  const map = L.map('map', { zoomControl: true }).setView([23.8103, 90.4125], 12); // ঢাকা কেন্দ্র করে শুরু
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 19
+  }).addTo(map);
+
+  const markers = {};
+  const driverListEl = document.getElementById('driver-list');
+  const summaryEl = document.getElementById('summary');
+  let hasFitBounds = false;
+
+  function statusOf(updatedAt){
+    if(!updatedAt) return 'off';
+    const diff = Date.now() - updatedAt;
+    if(diff > OFFLINE_AFTER_MS) return 'off';
+    if(diff > STALE_AFTER_MS) return 'stale';
+    return 'on';
+  }
+
+  function timeAgo(ts){
+    if(!ts) return 'কখনো শেয়ার করেনি';
+    const s = Math.floor((Date.now() - ts) / 1000);
+    if(s < 60) return s + ' সেকেন্ড আগে';
+    const m = Math.floor(s / 60);
+    if(m < 60) return m + ' মিনিট আগে';
+    const h = Math.floor(m / 60);
+    return h + ' ঘণ্টা আগে';
+  }
+
+  function pinIcon(name, status){
+    const initials = name.replace('ড্রাইভার ', '');
+    return L.divIcon({
+      html: '<div class="marker-pin' + (status !== 'on' ? ' stale' : '') + '"><div class="marker-label">' + initials + '</div></div>',
+      className: '',
+      iconSize: [34, 34],
+      iconAnchor: [17, 34]
+    });
+  }
+
+  function render(driverId, data){
+    const status = statusOf(data.updatedAt);
+    const hasCoords = data.lat && data.lng;
+
+    // --- মার্কার আপডেট ---
+    if(hasCoords){
+      const latlng = [data.lat, data.lng];
+      if(markers[driverId]){
+        markers[driverId].setLatLng(latlng);
+        markers[driverId].setIcon(pinIcon(data.name, status));
+      } else {
+        markers[driverId] = L.marker(latlng, { icon: pinIcon(data.name, status) }).addTo(map);
+      }
+      markers[driverId].bindPopup(
+        '<div class="popup-title">' + data.name + '</div>' +
+        '<div class="popup-meta">' + timeAgo(data.updatedAt) + '<br>নির্ভুলতা ±' + (data.accuracy || '—') + ' মি.</div>'
+      );
+    }
+
+    // --- সাইডবার কার্ড আপডেট ---
+    let card = document.getElementById('card-' + driverId);
+    if(!card){
+      card = document.createElement('div');
+      card.className = 'driver-card';
+      card.id = 'card-' + driverId;
+      card.addEventListener('click', () => {
+        if(markers[driverId]){
+          map.setView(markers[driverId].getLatLng(), 15);
+          markers[driverId].openPopup();
+        }
+      });
+      driverListEl.appendChild(card);
+    }
+    card.innerHTML =
+      '<div class="driver-top">' +
+        '<div class="driver-name">' + data.name + '</div>' +
+        '<div class="dot ' + status + '"></div>' +
+      '</div>' +
+      '<div class="driver-meta">' + timeAgo(data.updatedAt) + '</div>';
+  }
+
+  function refreshSummary(all){
+    const total = Object.keys(all).length;
+    const live = Object.values(all).filter(d => statusOf(d.updatedAt) === 'on').length;
+    summaryEl.textContent = live + ' / ' + total + ' জন এখন লাইভ';
+  }
+
+  try{
+    if(firebaseConfig.apiKey.includes('PASTE')){
+      document.getElementById('setupBanner').style.display = 'block';
+      summaryEl.textContent = 'সেটআপ বাকি আছে';
+      driverListEl.innerHTML = '<div class="empty-state">Firebase কনফিগারেশন বসানোর পর এখানে ড্রাইভারদের তালিকা দেখা যাবে।</div>';
+    } else {
+      firebase.initializeApp(firebaseConfig);
+      const db = firebase.database();
+      db.ref('drivers').on('value', (snap) => {
+        const all = snap.val() || {};
+        driverListEl.innerHTML = '';
+        Object.keys(all).forEach(driverId => render(driverId, all[driverId]));
+        refreshSummary(all);
+
+        if(!hasFitBounds){
+          const coords = Object.values(all).filter(d => d.lat && d.lng).map(d => [d.lat, d.lng]);
+          if(coords.length > 0){
+            map.fitBounds(coords, { padding: [40, 40] });
+            hasFitBounds = true;
+          }
+        }
+      });
+
+      // প্রতি ১৫ সেকেন্ডে "কতক্ষণ আগে" আর স্ট্যাটাস রঙ রিফ্রেশ করবে, নতুন ডেটা ছাড়াই
+      setInterval(() => {
+        db.ref('drivers').once('value').then(snap => {
+          const all = snap.val() || {};
+          Object.keys(all).forEach(driverId => render(driverId, all[driverId]));
+          refreshSummary(all);
+        });
+      }, 15000);
+    }
+  }catch(e){
+    console.error(e);
+    summaryEl.textContent = 'ত্রুটি হয়েছে — কনসোল দেখুন';
+  }
+</script>
+
+</body>
+</html>
