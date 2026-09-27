@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T Eran - Manager Dashboard</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root{
+    --bg:#0F172A; --surface:#16213A; --surface-2:#1E293B;
+    --accent:#F59E0B; --text:#E2E8F0; --text-muted:#8CA0BE;
+    --on:#10B981; --stale:#F59E0B; --off:#EF4444; --speeding:#F43F5E; --geofence:#A855F7;
+    --border: rgba(148,163,184,0.15);
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;}
+  body{font-family:'Inter',sans-serif;color:var(--text);background:var(--bg);display:flex;height:100vh;overflow:hidden;}
+
+  /* ---- Login gate ---- */
+  #loginGate{position:fixed;inset:0;background:var(--bg);z-index:3000;display:flex;align-items:center;justify-content:center;}
+  #loginGate.hidden{display:none;}
+  .login-card{width:92%;max-width:360px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:30px;}
+  .login-card h2{font-family:'Barlow Condensed',sans-serif;font-size:26px;text-align:center;margin:0 0 20px 0;text-transform:uppercase;}
+  .login-card input{width:100%;background:var(--surface-2);border:1px solid var(--border);color:var(--text);padding:12px;border-radius:9px;font-size:14px;margin-top:10px;}
+  .login-card button{width:100%;background:var(--accent);color:#1A1200;border:none;padding:13px;border-radius:9px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;margin-top:16px;cursor:pointer;}
+  #loginMsg{margin-top:12px;font-size:12px;text-align:center;color:var(--text-muted);}
+
+  #app{display:none;width:100%;height:100%;}
+  #app.show{display:flex;}
+
+  #sidebar{width:340px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
+  #sidebar-header{padding:18px 18px 12px 18px;border-bottom:1px solid var(--border);}
+  .eyebrow{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.14em;color:var(--accent);text-transform:uppercase;margin-bottom:4px;}
+  h1{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:24px;margin:0;text-transform:uppercase;letter-spacing:0.01em;}
+  #summary{font-size:13px;color:var(--text-muted);margin-top:4px;}
+
+  #searchRow{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;}
+  #searchInput{flex:1;min-width:100px;background:var(--surface-2);border:1px solid var(--border);color:var(--text);padding:9px 10px;border-radius:8px;font-size:13px;}
+  #dateInput{background:var(--surface-2);border:1px solid var(--border);color:var(--text);padding:9px 8px;border-radius:8px;font-size:12px;}
+  .toolbtn{background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:9px 10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;}
+  .toolbtn.accent{background:var(--accent);color:#1A1200;border:none;}
+  #toolRow{display:flex;gap:6px;margin-top:8px;}
+
+  #driver-list{padding:10px 12px;flex:1;overflow-y:auto;}
+
+  .driver-card{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:9px;cursor:pointer;transition:border-color 0.15s ease;}
+  .driver-card:hover{border-color:var(--accent);}
+  .driver-card.speeding{border-color:var(--speeding);box-shadow:0 0 0 1px var(--speeding);}
+  .driver-card.outside{border-color:var(--geofence);}
+
+  .driver-top{display:flex;align-items:center;justify-content:space-between;}
+  .driver-name{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:17px;}
+  .driver-vehicle{font-size:11px;color:var(--text-muted);}
+  .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+  .dot.on{background:var(--on);animation:pulse 1.8s infinite;}
+  .dot.stale{background:var(--stale);}
+  .dot.off{background:var(--off);}
+  .dot.speeding{background:var(--speeding);animation:pulse 0.9s infinite;}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(16,185,129,0.55);}70%{box-shadow:0 0 0 8px rgba(16,185,129,0);}100%{box-shadow:0 0 0 0 rgba(16,185,129,0);}}
+
+  .driver-meta{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-muted);margin-top:6px;display:flex;justify-content:space-between;}
+  .driver-stats{display:flex;gap:12px;margin-top:8px;font-size:11.5px;color:var(--text-muted);flex-wrap:wrap;}
+  .driver-stats b{color:var(--text);font-family:'JetBrains Mono',monospace;}
+  .speed-warn{color:var(--speeding) !important;font-weight:700;}
+  .battery-low{color:var(--off) !important;font-weight:700;}
+  .badge-outside{display:inline-block;background:var(--geofence);color:white;font-size:10px;padding:1px 6px;border-radius:6px;margin-left:6px;}
+
+  .card-actions{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;}
+  .card-actions button, .card-actions a{flex:1;min-width:60px;padding:7px;border-radius:7px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:11px;cursor:pointer;text-align:center;text-decoration:none;}
+  .card-actions button:hover{border-color:var(--accent);}
+  .card-actions .danger:hover{border-color:var(--off);color:var(--off);}
+
+  .empty-state{padding:20px 16px;color:var(--text-muted);font-size:13px;text-align:center;line-height:1.6;}
+
+  #map{flex:1;height:100%;}
+
+  .marker-pin{width:32px;height:32px;border-radius:50% 50% 50% 0;background:var(--on);transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 10px rgba(0,0,0,0.4);border:2px solid #0F172A;}
+  .marker-pin.stopped{background:var(--stale);}
+  .marker-pin.stale{background:var(--text-muted);}
+  .marker-pin.speeding{background:var(--speeding);}
+  .marker-label{transform:rotate(45deg);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:11px;color:#08110A;}
+
+  .leaflet-popup-content-wrapper{background:var(--surface-2);color:var(--text);border-radius:10px;}
+  .leaflet-popup-tip{background:var(--surface-2);}
+  .popup-title{font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;margin-bottom:4px;}
+  .popup-meta{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--text-muted);line-height:1.6;}
+
+  /* ---- Generic modal ---- */
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);display:none;align-items:center;justify-content:center;z-index:2000;padding:20px;}
+  .modal-overlay.show{display:flex;}
+  .modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:26px;width:100%;max-width:400px;max-height:90vh;overflow-y:auto;}
+  .modal h2{font-family:'Barlow Condensed',sans-serif;font-size:22px;text-transform:uppercase;margin:0 0 16px 0;}
+  .modal label{display:block;font-size:12px;color:var(--text-muted);margin-bottom:5px;margin-top:12px;}
+  .modal input,.modal select{width:100%;background:var(--surface-2);border:1px solid var(--border);color:var(--text);padding:11px;border-radius:8px;font-size:14px;}
+  .modal-actions{display:flex;gap:10px;margin-top:22px;}
+  .modal-actions button{flex:1;padding:12px;border-radius:9px;border:none;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;cursor:pointer;}
+  .btn-accent{background:var(--accent);color:#1A1200;}
+  .btn-plain{background:var(--surface-2);color:var(--text);border:1px solid var(--border) !important;}
+  .form-msg{margin-top:12px;font-size:12px;text-align:center;color:var(--text-muted);}
+
+  #reportModal .modal{max-width:600px;}
+  #reportChart{margin-top:16px;background:var(--surface-2);border-radius:10px;padding:10px;}
+  #reportTable{width:100%;margin-top:16px;border-collapse:collapse;font-size:12.5px;}
+  #reportTable th,#reportTable td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);}
+  #reportTable th{color:var(--text-muted);font-weight:600;}
+
+  .setup-banner{position:absolute;top:16px;left:360px;right:16px;background:var(--off);color:#fff;padding:12px 18px;border-radius:10px;font-size:13px;z-index:1000;display:none;}
+</style>
+</head>
+<body>
+
+<!-- ---- Manager Login Gate ---- -->
+<div id="loginGate">
+  <div class="login-card">
+    <h2>🔒 ম্যানেজার লগইন</h2>
+    <input id="mgrEmail" type="email" placeholder="ম্যানেজার ইমেইল">
+    <input id="mgrPassword" type="password" placeholder="পাসওয়ার্ড">
+    <button id="mgrLoginBtn">লগইন</button>
+    <div id="loginMsg"></div>
+  </div>
+</div>
+
+<div id="app">
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <div class="eyebrow">T Eran · ম্যানেজার</div>
+      <h1>লাইভ ফ্লিট</h1>
+      <div id="summary">লোড হচ্ছে...</div>
+      <div id="searchRow">
+        <input id="searchInput" type="text" placeholder="নাম দিয়ে খুঁজুন...">
+        <input id="dateInput" type="date">
+      </div>
+      <div id="toolRow">
+        <button class="toolbtn accent" id="addDriverBtn">+ ড্রাইভার</button>
+        <button class="toolbtn" id="reportBtn">📊 রিপোর্ট</button>
+        <button class="toolbtn" id="addManagerBtn">+ ম্যানেজার</button>
+      </div>
+    </div>
+    <div id="driver-list"></div>
+  </div>
+
+  <div id="map"></div>
+  <div class="setup-banner" id="setupBanner">⚠ firebaseConfig বসানো হয়নি।</div>
+</div>
+
+<!-- ---- Add / Edit Driver Modal ---- -->
+<div class="modal-overlay" id="driverModalOverlay">
+  <div class="modal">
+    <h2 id="driverModalTitle">নতুন ড্রাইভার</h2>
+    <input type="hidden" id="editUid">
+    <label>ড্রাইভারের নাম</label>
+    <input id="newName" type="text" placeholder="যেমন: করিম উদ্দিন">
+    <label>গাড়ির নম্বর</label>
+    <input id="newVehicle" type="text" placeholder="যেমন: ঢাকা-মেট্রো-গ-১২৩৪">
+    <label>ফোন নম্বর (ঐচ্ছিক)</label>
+    <input id="newPhone" type="text" placeholder="01XXXXXXXXX">
+    <div id="authFields">
+      <label>লগইন ইমেইল</label>
+      <input id="newEmail" type="email" placeholder="driver1@teran.com">
+      <label>পাসওয়ার্ড</label>
+      <input id="newPassword" type="text" placeholder="কমপক্ষে ৬ অক্ষর">
+    </div>
+    <div id="addDriverMsg" class="form-msg"></div>
+    <div class="modal-actions">
+      <button class="btn-plain" id="cancelDriverBtn">বাতিল</button>
+      <button class="btn-accent" id="saveDriverBtn">সেভ করুন</button>
+    </div>
+  </div>
+</div>
+
+<!-- ---- Add Manager Modal ---- -->
+<div class="modal-overlay" id="managerModalOverlay">
+  <div class="modal">
+    <h2>নতুন ম্যানেজার</h2>
+    <label>ইমেইল</label>
+    <input id="mgrNewEmail" type="email" placeholder="manager2@teran.com">
+    <label>পাসওয়ার্ড</label>
+    <input id="mgrNewPassword" type="text" placeholder="কমপক্ষে ৬ অক্ষর">
+    <div id="addManagerMsg" class="form-msg"></div>
+    <div class="modal-actions">
+      <button class="btn-plain" id="cancelManagerBtn">বাতিল</button>
+      <button class="btn-accent" id="saveManagerBtn">সেভ করুন</button>
+    </div>
+  </div>
+</div>
+
+<!-- ---- Report Modal ---- -->
+<div class="modal-overlay" id="reportModal">
+  <div class="modal">
+    <h2>📊 সাপ্তাহিক রিপোর্ট (গত ৭ দিন)</h2>
+    <canvas id="reportChart" height="180"></canvas>
+    <table id="reportTable">
+      <thead><tr><th>ড্রাইভার</th><th>৭ দিনের মোট দূরত্ব</th></tr></thead>
+      <tbody id="reportTableBody"></tbody>
+    </table>
+    <div class="modal-actions">
+      <button class="btn-plain" id="closeReportBtn">বন্ধ করুন</button>
+      <button class="btn-accent" id="exportCsvBtn">⬇ CSV ডাউনলোড</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ================================================================
+  const firebaseConfig = {
+    apiKey: "AIzaSyBuu25ZYUGJWiayqzMTUavodF-rcMVFrCk",
+    authDomain: "t-eran-2d426.firebaseapp.com",
+    databaseURL: "https://t-eran-2d426-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "t-eran-2d426",
+    storageBucket: "t-eran-2d426.firebasestorage.app",
+    messagingSenderId: "256100312636",
+    appId: "1:256100312636:web:5e2d234a8b9ffff2e20539",
+    measurementId: "G-PMC6W971RS"
+  };
+  // ================================================================
+
+  const STALE_AFTER_MS = 60 * 1000;
+  const OFFLINE_AFTER_MS = 5 * 60 * 1000;
+  const SPEED_LIMIT_KMH = 80;
+  const LOW_BATTERY_PCT = 20;
+  // গ্যারেজ/অফিসের কেন্দ্র বিন্দু ও ব্যাসার্ধ (কিমি) — এই এলাকার বাইরে গেলে এলার্ট
+  // Google Maps-এ আপনার অফিসের লোকেশনে ক্লিক করলে lat,lng কপি করা যায়
+  const GEOFENCE = { lat: 23.8103, lng: 90.4125, radiusKm: 25 };
+
+  let auth, db;
+  let driverProfiles = {}, liveData = {}, tripCache = {}, weeklyCache = {};
+  let markers = {}, routeLine = null;
+  let searchTerm = '';
+  let selectedDateStr = new Date().toISOString().slice(0,10);
+  let hasFitBounds = false;
+  let alertState = {}; // uid -> {wasSpeeding, wasOffline, wasOutside}
+  let notifPermissionAsked = false;
+
+  const map = L.map('map').setView([23.8103, 90.4125], 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors', maxZoom: 19
+  }).addTo(map);
+
+  const driverListEl = document.getElementById('driver-list');
+  const summaryEl = document.getElementById('summary');
+
+  // ---------------- সাউন্ড এলার্ট (Web Audio, কোনো ফাইল লাগে না) ----------------
+  function beep(freq, duration){
+    try{
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.frequency.value = freq;
+      osc.connect(gain); gain.connect(ctx.destination);
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      osc.start();
+      osc.stop(ctx.currentTime + duration);
+    }catch(e){}
+  }
+  function notify(title, body){
+    if('Notification' in window && Notification.permission === 'granted'){
+      new Notification(title, { body });
+    }
+  }
+
+  // ---------------- হিসাব সহায়ক ----------------
+  function statusOf(updatedAt){
+    if(!updatedAt) return 'off';
+    const diff = Date.now() - updatedAt;
+    if(diff > OFFLINE_AFTER_MS) return 'off';
+    if(diff > STALE_AFTER_MS) return 'stale';
+    return 'on';
+  }
+  function timeAgo(ts){
+    if(!ts) return 'কখনো শেয়ার করেনি';
+    const s = Math.floor((Date.now() - ts) / 1000);
+    if(s < 60) return s + ' সেকেন্ড আগে';
+    const m = Math.floor(s / 60);
+    if(m < 60) return m + ' মিনিট আগে';
+    const h = Math.floor(m / 60);
+    return h + ' ঘণ্টা আগে';
+  }
+  function haversineKm(lat1, lng1, lat2, lng2){
+    const R = 6371;
+    const dLat = (lat2-lat1) * Math.PI/180;
+    const dLng = (lng2-lng1) * Math.PI/180;
+    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+  function distanceFromPoints(points){
+    if(!points || points.length < 2) return 0;
+    let total = 0;
+    for(let i=1;i<points.length;i++) total += haversineKm(points[i-1].lat, points[i-1].lng, points[i].lat, points[i].lng);
+    return total;
+  }
+  function dayRangeMs(dateStr){
+    const start = new Date(dateStr + 'T00:00:00');
+    const end = new Date(dateStr + 'T23:59:59.999');
+    return { start: start.getTime(), end: end.getTime() };
+  }
+  function isOutsideGeofence(lat, lng){
+    return haversineKm(lat, lng, GEOFENCE.lat, GEOFENCE.lng) > GEOFENCE.radiusKm;
+  }
+
+  async function loadTripForDate(uid, dateStr){
+    const { start, end } = dayRangeMs(dateStr);
+    try{
+      const snap = await db.ref('tripHistory/' + uid)
+        .orderByChild('timestamp').startAt(start).endAt(end).once('value');
+      const val = snap.val() || {};
+      tripCache[uid] = Object.values(val).sort((a,b) => a.timestamp - b.timestamp);
+    }catch(e){
+      console.error('trip load failed', e);
+      tripCache[uid] = [];
+    }
+  }
+
+  async function loadAllTripsForSelectedDate(){
+    const uids = Object.keys(driverProfiles);
+    await Promise.all(uids.map(uid => loadTripForDate(uid, selectedDateStr)));
+    renderAll();
+  }
+
+  // ---------------- মার্কার ও কার্ড রেন্ডার ----------------
+  function pinIcon(name, statusClass){
+    const initials = (name || '?').slice(0, 2);
+    return L.divIcon({
+      html: '<div class="marker-pin ' + statusClass + '"><div class="marker-label">' + initials + '</div></div>',
+      className: '', iconSize: [32, 32], iconAnchor: [16, 32]
+    });
+  }
+  function markerStatusClass(uid){
+    const d = liveData[uid] || {};
+    const st = statusOf(d.updatedAt);
+    if(st !== 'on') return 'stale';
+    if((d.speed || 0) > SPEED_LIMIT_KMH) return 'speeding';
+    return d.status === 'moving' ? '' : 'stopped';
+  }
+
+  async function showRoute(uid){
+    if(!tripCache[uid]) await loadTripForDate(uid, selectedDateStr);
+    const points = tripCache[uid];
+    if(routeLine){ map.removeLayer(routeLine); routeLine = null; }
+    if(!points || points.length < 2){ alert('নির্বাচিত দিনের জন্য যথেষ্ট রুট ডেটা নেই।'); return; }
+    const latlngs = points.map(p => [p.lat, p.lng]);
+    routeLine = L.polyline(latlngs, { color: '#F59E0B', weight: 4, opacity: 0.8 }).addTo(map);
+    map.fitBounds(routeLine.getBounds(), { padding: [40,40] });
+  }
+
+  function openEditDriver(uid){
+    const p = driverProfiles[uid] || {};
+    document.getElementById('driverModalTitle').textContent = 'ড্রাইভার এডিট করুন';
+    document.getElementById('editUid').value = uid;
+    document.getElementById('newName').value = p.name || '';
+    document.getElementById('newVehicle').value = p.vehicleNo || '';
+    document.getElementById('newPhone').value = p.phone || '';
+    document.getElementById('authFields').style.display = 'none'; // এডিটে লগইন তথ্য বদলানো যাবে না
+    document.getElementById('addDriverMsg').textContent = '';
+    document.getElementById('driverModalOverlay').classList.add('show');
+  }
+
+  async function deleteDriver(uid){
+    const name = (driverProfiles[uid] || {}).name || 'এই ড্রাইভার';
+    if(!confirm(name + ' কে মুছে ফেলতে চান? (লগইন অ্যাকাউন্ট Firebase Authentication-এ থেকে যাবে, শুধু প্রোফাইল ও লোকেশন ডেটা মুছবে — চাইলে ড্রাইভার আর লগইন করতে পারবে না কারণ প্রোফাইল খুঁজে পাবে না)')) return;
+    await db.ref('drivers/' + uid).remove();
+    await db.ref('liveDrivers/' + uid).remove();
+    await db.ref('tripHistory/' + uid).remove();
+    delete driverProfiles[uid];
+    delete liveData[uid];
+    delete tripCache[uid];
+    const card = document.getElementById('card-' + uid);
+    if(card) card.remove();
+    if(markers[uid]){ map.removeLayer(markers[uid]); delete markers[uid]; }
+    renderAll();
+  }
+
+  function renderCard(uid){
+    const profile = driverProfiles[uid] || {};
+    const d = liveData[uid] || {};
+    const status = statusOf(d.updatedAt);
+    const speed = d.speed || 0;
+    const isSpeeding = status === 'on' && speed > SPEED_LIMIT_KMH;
+    const outside = status === 'on' && d.lat && d.lng && isOutsideGeofence(d.lat, d.lng);
+    const dotClass = isSpeeding ? 'speeding' : status;
+    const distanceKm = distanceFromPoints(tripCache[uid]).toFixed(1);
+    const battery = d.battery;
+    const lowBattery = battery !== undefined && battery !== null && battery <= LOW_BATTERY_PCT;
+
+    let card = document.getElementById('card-' + uid);
+    if(!card){
+      card = document.createElement('div');
+      card.className = 'driver-card';
+      card.id = 'card-' + uid;
+      driverListEl.appendChild(card);
+    }
+    card.classList.toggle('speeding', isSpeeding);
+    card.classList.toggle('outside', outside);
+
+    const phone = profile.phone;
+    const callBtn = phone ? '<a href="tel:' + phone + '">📞 কল</a>' : '<button disabled style="opacity:0.4;">📞 নম্বর নেই</button>';
+    const batteryHtml = battery !== undefined && battery !== null
+      ? '<div>ব্যাটারি: <b class="' + (lowBattery ? 'battery-low' : '') + '">' + battery + '%</b></div>' : '';
+
+    card.innerHTML =
+      '<div class="driver-top">' +
+        '<div><div class="driver-name">' + (profile.name || 'নাম নেই') + (outside ? '<span class="badge-outside">এলাকার বাইরে</span>' : '') + '</div>' +
+        '<div class="driver-vehicle">' + (profile.vehicleNo || '—') + '</div></div>' +
+        '<div class="dot ' + dotClass + '"></div>' +
+      '</div>' +
+      '<div class="driver-stats">' +
+        '<div>গতি: <b class="' + (isSpeeding ? 'speed-warn' : '') + '">' + speed.toFixed(0) + ' কিমি/ঘ.</b></div>' +
+        '<div>দূরত্ব: <b>' + distanceKm + ' কিমি</b></div>' +
+        batteryHtml +
+      '</div>' +
+      '<div class="driver-meta"><span>' + timeAgo(d.updatedAt) + '</span></div>' +
+      '<div class="card-actions">' +
+        '<button class="route-btn">🗺 রুট</button>' +
+        '<button class="edit-btn">✏️ এডিট</button>' +
+        '<button class="danger delete-btn">🗑</button>' +
+        callBtn +
+      '</div>';
+
+    card.querySelector('.route-btn').addEventListener('click', (e) => { e.stopPropagation(); showRoute(uid); });
+    card.querySelector('.edit-btn').addEventListener('click', (e) => { e.stopPropagation(); openEditDriver(uid); });
+    card.querySelector('.delete-btn').addEventListener('click', (e) => { e.stopPropagation(); deleteDriver(uid); });
+    card.addEventListener('click', () => {
+      if(markers[uid]){ map.setView(markers[uid].getLatLng(), 15); markers[uid].openPopup(); }
+    });
+
+    const matches = !searchTerm || (profile.name || '').toLowerCase().includes(searchTerm);
+    card.style.display = matches ? 'block' : 'none';
+
+    // ---- এলার্ট (স্পিড / অফলাইন / জিওফেন্স) — শুধু অবস্থা বদলালে একবার বাজবে ----
+    const prev = alertState[uid] || {};
+    if(isSpeeding && !prev.wasSpeeding){
+      beep(880, 0.3);
+      notify('⚠ স্পিড লিমিট!', (profile.name || 'ড্রাইভার') + ' ' + speed.toFixed(0) + ' কিমি/ঘ. গতিতে চলছে');
+    }
+    if(status === 'off' && prev.wasOffline !== true){
+      beep(220, 0.4);
+      notify('🔴 অফলাইন', (profile.name || 'ড্রাইভার') + ' এর লোকেশন আপডেট বন্ধ হয়ে গেছে');
+    }
+    if(outside && !prev.wasOutside){
+      beep(660, 0.3);
+      notify('📍 এলাকার বাইরে', (profile.name || 'ড্রাইভার') + ' নির্ধারিত এলাকার বাইরে চলে গেছে');
+    }
+    alertState[uid] = { wasSpeeding: isSpeeding, wasOffline: status === 'off', wasOutside: outside };
+  }
+
+  function renderMarker(uid){
+    const profile = driverProfiles[uid] || {};
+    const d = liveData[uid] || {};
+    if(!d.lat || !d.lng) return;
+    const statusClass = markerStatusClass(uid);
+    const latlng = [d.lat, d.lng];
+    if(markers[uid]){
+      markers[uid].setLatLng(latlng);
+      markers[uid].setIcon(pinIcon(profile.name, statusClass));
+    } else {
+      markers[uid] = L.marker(latlng, { icon: pinIcon(profile.name, statusClass) }).addTo(map);
+    }
+    const isSpeeding = statusClass === 'speeding';
+    markers[uid].bindPopup(
+      '<div class="popup-title">' + (profile.name || 'নাম নেই') + '</div>' +
+      '<div class="popup-meta">' + (profile.vehicleNo || '—') + '<br>' +
+      'গতি: ' + (d.speed || 0).toFixed(0) + ' কিমি/ঘ.' + (isSpeeding ? ' ⚠ স্পিড লিমিট পার!' : '') + '<br>' +
+      timeAgo(d.updatedAt) + '</div>'
+    );
+  }
+
+  function renderAll(){
+    const uids = new Set([...Object.keys(driverProfiles), ...Object.keys(liveData)]);
+    let total = uids.size, live = 0, speeding = 0;
+    uids.forEach(uid => {
+      renderCard(uid);
+      renderMarker(uid);
+      const st = statusOf((liveData[uid]||{}).updatedAt);
+      if(st === 'on') live++;
+      if(st === 'on' && (liveData[uid].speed||0) > SPEED_LIMIT_KMH) speeding++;
+    });
+    summaryEl.textContent = live + ' / ' + total + ' জন লাইভ' + (speeding > 0 ? ' · ⚠ ' + speeding + ' জন স্পিড লিমিটে' : '');
+
+    if(!hasFitBounds){
+      const coords = Object.values(liveData).filter(d => d.lat && d.lng).map(d => [d.lat, d.lng]);
+      if(coords.length > 0){ map.fitBounds(coords, { padding: [40,40] }); hasFitBounds = true; }
+    }
+  }
+
+  document.getElementById('searchInput').addEventListener('input', (e) => { searchTerm = e.target.value.trim().toLowerCase(); renderAll(); });
+  document.getElementById('dateInput').value = selectedDateStr;
+  document.getElementById('dateInput').addEventListener('change', (e) => {
+    selectedDateStr = e.target.value;
+    if(routeLine){ map.removeLayer(routeLine); routeLine = null; }
+    loadAllTripsForSelectedDate();
+  });
+
+  // ---------------- Add / Edit Driver Modal ----------------
+  const driverModal = document.getElementById('driverModalOverlay');
+  document.getElementById('addDriverBtn').addEventListener('click', () => {
+    document.getElementById('driverModalTitle').textContent = 'নতুন ড্রাইভার';
+    document.getElementById('editUid').value = '';
+    document.getElementById('newName').value = '';
+    document.getElementById('newVehicle').value = '';
+    document.getElementById('newPhone').value = '';
+    document.getElementById('newEmail').value = '';
+    document.getElementById('newPassword').value = '';
+    document.getElementById('authFields').style.display = 'block';
+    document.getElementById('addDriverMsg').textContent = '';
+    driverModal.classList.add('show');
+  });
+  document.getElementById('cancelDriverBtn').addEventListener('click', () => driverModal.classList.remove('show'));
+
+  document.getElementById('saveDriverBtn').addEventListener('click', async () => {
+    const uid = document.getElementById('editUid').value;
+    const name = document.getElementById('newName').value.trim();
+    const vehicleNo = document.getElementById('newVehicle').value.trim();
+    const phone = document.getElementById('newPhone').value.trim();
+    const msg = document.getElementById('addDriverMsg');
+
+    if(!name){ msg.textContent = 'নাম আবশ্যক।'; return; }
+
+    if(uid){
+      // এডিট মোড — শুধু প্রোফাইল আপডেট
+      await db.ref('drivers/' + uid).update({ name, vehicleNo, phone });
+      driverProfiles[uid] = { ...driverProfiles[uid], name, vehicleNo, phone };
+      msg.textContent = '✅ আপডেট হয়েছে!';
+      renderAll();
+      setTimeout(() => driverModal.classList.remove('show'), 800);
+      return;
+    }
+
+    // নতুন ড্রাইভার মোড — Firebase Auth অ্যাকাউন্ট + প্রোফাইল
+    const email = document.getElementById('newEmail').value.trim();
+    const password = document.getElementById('newPassword').value;
+    if(!email || !password){ msg.textContent = 'নাম, ইমেইল ও পাসওয়ার্ড আবশ্যক।'; return; }
+    if(password.length < 6){ msg.textContent = 'পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।'; return; }
+
+    msg.textContent = 'তৈরি হচ্ছে...';
+    const secondaryApp = firebase.initializeApp(firebaseConfig, 'Secondary-' + Date.now());
+    try{
+      const cred = await secondaryApp.auth().createUserWithEmailAndPassword(email, password);
+      const newUid = cred.user.uid;
+      await db.ref('drivers/' + newUid).set({ name, vehicleNo, phone });
+      await secondaryApp.auth().signOut();
+      await secondaryApp.delete();
+      msg.textContent = '✅ ড্রাইভার যোগ হয়েছে!';
+      setTimeout(() => { driverModal.classList.remove('show'); msg.textContent = ''; }, 1000);
+    }catch(err){
+      console.error(err);
+      msg.textContent = '❌ ' + (err.message || 'একটা ত্রুটি হয়েছে');
+      try{ await secondaryApp.delete(); }catch(e){}
+    }
+  });
+
+  // ---------------- Add Manager Modal ----------------
+  const managerModal = document.getElementById('managerModalOverlay');
+  document.getElementById('addManagerBtn').addEventListener('click', () => managerModal.classList.add('show'));
+  document.getElementById('cancelManagerBtn').addEventListener('click', () => managerModal.classList.remove('show'));
+  document.getElementById('saveManagerBtn').addEventListener('click', async () => {
+    const email = document.getElementById('mgrNewEmail').value.trim();
+    const password = document.getElementById('mgrNewPassword').value;
+    const msg = document.getElementById('addManagerMsg');
+    if(!email || !password){ msg.textContent = 'ইমেইল ও পাসওয়ার্ড আবশ্যক।'; return; }
+    if(password.length < 6){ msg.textContent = 'পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।'; return; }
+    msg.textContent = 'তৈরি হচ্ছে...';
+    const secondaryApp = firebase.initializeApp(firebaseConfig, 'Secondary-' + Date.now());
+    try{
+      const cred = await secondaryApp.auth().createUserWithEmailAndPassword(email, password);
+      await db.ref('managers/' + cred.user.uid).set(true);
+      await secondaryApp.auth().signOut();
+      await secondaryApp.delete();
+      msg.textContent = '✅ ম্যানেজার যোগ হয়েছে!';
+      setTimeout(() => { managerModal.classList.remove('show'); msg.textContent = ''; }, 1000);
+    }catch(err){
+      console.error(err);
+      msg.textContent = '❌ ' + (err.message || 'একটা ত্রুটি হয়েছে');
+      try{ await secondaryApp.delete(); }catch(e){}
+    }
+  });
+
+  // ---------------- Report Modal (সাপ্তাহিক চার্ট + CSV) ----------------
+  let chartInstance = null;
+  const reportModal = document.getElementById('reportModal');
+
+  document.getElementById('reportBtn').addEventListener('click', async () => {
+    reportModal.classList.add('show');
+    await buildWeeklyReport();
+  });
+  document.getElementById('closeReportBtn').addEventListener('click', () => reportModal.classList.remove('show'));
+
+  async function buildWeeklyReport(){
+    const days = [];
+    for(let i = 6; i >= 0; i--){
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      days.push(d.toISOString().slice(0,10));
+    }
+    const uids = Object.keys(driverProfiles);
+    const perDriverTotal = {};
+    const fleetPerDay = days.map(() => 0);
+
+    await Promise.all(uids.map(async (uid) => {
+      const { start } = dayRangeMs(days[0]);
+      const { end } = dayRangeMs(days[days.length-1]);
+      let points = [];
+      try{
+        const snap = await db.ref('tripHistory/' + uid).orderByChild('timestamp').startAt(start).endAt(end).once('value');
+        points = Object.values(snap.val() || {});
+      }catch(e){ console.error(e); }
+
+      const byDay = {};
+      days.forEach(d => byDay[d] = []);
+      points.sort((a,b) => a.timestamp - b.timestamp).forEach(p => {
+        const dayStr = new Date(p.timestamp).toISOString().slice(0,10);
+        if(byDay[dayStr]) byDay[dayStr].push(p);
+      });
+
+      let uidTotal = 0;
+      days.forEach((d, idx) => {
+        const dist = distanceFromPoints(byDay[d]);
+        fleetPerDay[idx] += dist;
+        uidTotal += dist;
+      });
+      perDriverTotal[uid] = uidTotal;
+    }));
+
+    // চার্ট আঁকা
+    const ctx = document.getElementById('reportChart').getContext('2d');
+    if(chartInstance) chartInstance.destroy();
+    chartInstance = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: days.map(d => d.slice(5)),
+        datasets: [{ label: 'ফ্লিট মোট দূরত্ব (কিমি)', data: fleetPerDay.map(v => Number(v.toFixed(1))), backgroundColor: '#F59E0B' }]
+      },
+      options: { responsive: true, plugins: { legend: { labels: { color: '#E2E8F0' } } },
+        scales: { x: { ticks: { color: '#8CA0BE' } }, y: { ticks: { color: '#8CA0BE' } } } }
+    });
+
+    // টেবিল
+    const tbody = document.getElementById('reportTableBody');
+    tbody.innerHTML = '';
+    uids.forEach(uid => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + ((driverProfiles[uid]||{}).name || '—') + '</td><td>' + (perDriverTotal[uid]||0).toFixed(1) + ' কিমি</td>';
+      tbody.appendChild(tr);
+    });
+
+    weeklyCache = { days, perDriverTotal };
+  }
+
+  document.getElementById('exportCsvBtn').addEventListener('click', () => {
+    let csv = 'Driver,Vehicle,Selected Date Distance (km),Status,Last Update\n';
+    Object.keys(driverProfiles).forEach(uid => {
+      const p = driverProfiles[uid];
+      const d = liveData[uid] || {};
+      const dist = distanceFromPoints(tripCache[uid]).toFixed(1);
+      const status = statusOf(d.updatedAt);
+      csv += [p.name || '', p.vehicleNo || '', dist, status, d.updatedAt ? new Date(d.updatedAt).toLocaleString() : ''].join(',') + '\n';
+    });
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'fleet-report-' + selectedDateStr + '.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // ---------------- Firebase init + Auth (Manager Login Gate) ----------------
+  try{
+    firebase.initializeApp(firebaseConfig);
+    auth = firebase.auth();
+    db = firebase.database();
+  }catch(e){
+    console.error(e);
+    document.getElementById('setupBanner').style.display = 'block';
+  }
+
+  document.getElementById('mgrLoginBtn').addEventListener('click', async () => {
+    const email = document.getElementById('mgrEmail').value.trim();
+    const password = document.getElementById('mgrPassword').value;
+    const msg = document.getElementById('loginMsg');
+    if(!email || !password){ msg.textContent = 'ইমেইল ও পাসওয়ার্ড দিন'; return; }
+    msg.textContent = 'লগইন হচ্ছে...';
+    try{
+      const cred = await auth.signInWithEmailAndPassword(email, password);
+      const uid = cred.user.uid;
+
+      // Bootstrap: যদি এখনো কোনো ম্যানেজার নিবন্ধিত না থাকে, তাহলে প্রথম সফল লগইনকারীই প্রথম ম্যানেজার হবেন
+      const managersSnap = await db.ref('managers').once('value');
+      const managersVal = managersSnap.val();
+      if(!managersVal){
+        await db.ref('managers/' + uid).set(true);
+      } else if(!managersVal[uid]){
+        msg.textContent = '❌ আপনি ম্যানেজার হিসেবে নিবন্ধিত নন।';
+        await auth.signOut();
+        return;
+      }
+
+      document.getElementById('loginGate').classList.add('hidden');
+      document.getElementById('app').classList.add('show');
+      startDashboard();
+    }catch(err){
+      console.error(err);
+      msg.textContent = '❌ ইমেইল/পাসওয়ার্ড ভুল অথবা অ্যাকাউন্ট নেই';
+    }
+  });
+
+  function startDashboard(){
+    if('Notification' in window && Notification.permission === 'default'){
+      Notification.requestPermission();
+    }
+
+    db.ref('drivers').on('value', (snap) => { driverProfiles = snap.val() || {}; loadAllTripsForSelectedDate(); });
+    db.ref('liveDrivers').on('value', (snap) => { liveData = snap.val() || {}; renderAll(); });
+    setInterval(renderAll, 15000);
+  }
+</script>
+
+</body>
+</html>
