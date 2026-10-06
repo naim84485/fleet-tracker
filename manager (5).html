@@ -224,7 +224,7 @@
   const SPEED_LIMIT_KMH = 80;
   const LOW_BATTERY_PCT = 20;
   // গ্যারেজ/অফিসের কেন্দ্র বিন্দু ও ব্যাসার্ধ (কিমি)। নিজের অফিসের lat,lng বসান।
-  const GEOFENCE = { lat: 23.8103, lng: 90.4125, radiusKm: 25 };
+  const GEOFENCE = { lat: 24.3745, lng: 88.6042, radiusKm: 25 };
 
   // স্থানীয় সময় অনুযায়ী তারিখ (UTC নয়), বাংলাদেশে রাত ১২টা-ভোর ৬টায় তারিখ ভুল হওয়া ঠেকায়
   function localDateStr(d){
@@ -240,9 +240,11 @@
   let hasFitBounds = false;
   let alertState = {};
 
-  const map = L.map('map').setView([23.8103, 90.4125], 12);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors', maxZoom: 19
+  const map = L.map('map').setView([24.3745, 88.6042], 12);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+    subdomains: 'abcd',
+    maxZoom: 19
   }).addTo(map);
   window.addEventListener('resize', () => map.invalidateSize());
 
