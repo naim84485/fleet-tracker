@@ -25,7 +25,6 @@
   html,body{height:100%;margin:0;}
   body{font-family:'Inter',sans-serif;color:var(--text);background:var(--bg);display:flex;height:100vh;overflow:hidden;}
 
-  /* ---- Login gate ---- */
   #loginGate{position:fixed;inset:0;background:var(--bg);z-index:3000;display:flex;align-items:center;justify-content:center;}
   #loginGate.hidden{display:none;}
   .login-card{width:92%;max-width:360px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:30px;}
@@ -94,7 +93,6 @@
   .popup-title{font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;margin-bottom:4px;}
   .popup-meta{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--text-muted);line-height:1.6;}
 
-  /* ---- Generic modal ---- */
   .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);display:none;align-items:center;justify-content:center;z-index:2000;padding:20px;}
   .modal-overlay.show{display:flex;}
   .modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:26px;width:100%;max-width:400px;max-height:90vh;overflow-y:auto;}
@@ -114,11 +112,16 @@
   #reportTable th{color:var(--text-muted);font-weight:600;}
 
   .setup-banner{position:absolute;top:16px;left:360px;right:16px;background:var(--off);color:#fff;padding:12px 18px;border-radius:10px;font-size:13px;z-index:1000;display:none;}
+
+  @media (max-width:700px){
+    #app.show{flex-direction:column;}
+    #sidebar{width:100%;height:45%;border-right:none;border-bottom:1px solid var(--border);}
+    #map{height:55%;}
+  }
 </style>
 </head>
 <body>
 
-<!-- ---- Manager Login Gate ---- -->
 <div id="loginGate">
   <div class="login-card">
     <h2>🔒 ম্যানেজার লগইন</h2>
@@ -149,10 +152,9 @@
   </div>
 
   <div id="map"></div>
-  <div class="setup-banner" id="setupBanner">⚠ firebaseConfig বসানো হয়নি।</div>
+  <div class="setup-banner" id="setupBanner">⚠ Firebase চালু করা যায়নি।</div>
 </div>
 
-<!-- ---- Add / Edit Driver Modal ---- -->
 <div class="modal-overlay" id="driverModalOverlay">
   <div class="modal">
     <h2 id="driverModalTitle">নতুন ড্রাইভার</h2>
@@ -175,7 +177,6 @@
   </div>
 </div>
 
-<!-- ---- Add Manager Modal ---- -->
 <div class="modal-overlay" id="managerModalOverlay">
   <div class="modal">
     <h2>নতুন ম্যানেজার</h2>
@@ -191,7 +192,6 @@
   </div>
 </div>
 
-<!-- ---- Report Modal ---- -->
 <div class="modal-overlay" id="reportModal">
   <div class="modal">
     <h2>📊 সাপ্তাহিক রিপোর্ট (গত ৭ দিন)</h2>
@@ -208,7 +208,6 @@
 </div>
 
 <script>
-  // ================================================================
   const firebaseConfig = {
     apiKey: "AIzaSyBuu25ZYUGJWiayqzMTUavodF-rcMVFrCk",
     authDomain: "t-eran-2d426.firebaseapp.com",
@@ -219,34 +218,37 @@
     appId: "1:256100312636:web:5e2d234a8b9ffff2e20539",
     measurementId: "G-PMC6W971RS"
   };
-  // ================================================================
 
   const STALE_AFTER_MS = 60 * 1000;
   const OFFLINE_AFTER_MS = 5 * 60 * 1000;
   const SPEED_LIMIT_KMH = 80;
   const LOW_BATTERY_PCT = 20;
-  // গ্যারেজ/অফিসের কেন্দ্র বিন্দু ও ব্যাসার্ধ (কিমি) — এই এলাকার বাইরে গেলে এলার্ট
-  // Google Maps-এ আপনার অফিসের লোকেশনে ক্লিক করলে lat,lng কপি করা যায়
+  // গ্যারেজ/অফিসের কেন্দ্র বিন্দু ও ব্যাসার্ধ (কিমি)। নিজের অফিসের lat,lng বসান।
   const GEOFENCE = { lat: 23.8103, lng: 90.4125, radiusKm: 25 };
+
+  // স্থানীয় সময় অনুযায়ী তারিখ (UTC নয়), বাংলাদেশে রাত ১২টা-ভোর ৬টায় তারিখ ভুল হওয়া ঠেকায়
+  function localDateStr(d){
+    const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+    return z.toISOString().slice(0,10);
+  }
 
   let auth, db;
   let driverProfiles = {}, liveData = {}, tripCache = {}, weeklyCache = {};
   let markers = {}, routeLine = null;
   let searchTerm = '';
-  let selectedDateStr = new Date().toISOString().slice(0,10);
+  let selectedDateStr = localDateStr(new Date());
   let hasFitBounds = false;
-  let alertState = {}; // uid -> {wasSpeeding, wasOffline, wasOutside}
-  let notifPermissionAsked = false;
+  let alertState = {};
 
   const map = L.map('map').setView([23.8103, 90.4125], 12);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors', maxZoom: 19
   }).addTo(map);
+  window.addEventListener('resize', () => map.invalidateSize());
 
   const driverListEl = document.getElementById('driver-list');
   const summaryEl = document.getElementById('summary');
 
-  // ---------------- সাউন্ড এলার্ট (Web Audio, কোনো ফাইল লাগে না) ----------------
   function beep(freq, duration){
     try{
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -261,11 +263,10 @@
   }
   function notify(title, body){
     if('Notification' in window && Notification.permission === 'granted'){
-      new Notification(title, { body });
+      try{ new Notification(title, { body }); }catch(e){}
     }
   }
 
-  // ---------------- হিসাব সহায়ক ----------------
   function statusOf(updatedAt){
     if(!updatedAt) return 'off';
     const diff = Date.now() - updatedAt;
@@ -275,7 +276,7 @@
   }
   function timeAgo(ts){
     if(!ts) return 'কখনো শেয়ার করেনি';
-    const s = Math.floor((Date.now() - ts) / 1000);
+    const s = Math.max(0, Math.floor((Date.now() - ts) / 1000));
     if(s < 60) return s + ' সেকেন্ড আগে';
     const m = Math.floor(s / 60);
     if(m < 60) return m + ' মিনিট আগে';
@@ -292,7 +293,10 @@
   function distanceFromPoints(points){
     if(!points || points.length < 2) return 0;
     let total = 0;
-    for(let i=1;i<points.length;i++) total += haversineKm(points[i-1].lat, points[i-1].lng, points[i].lat, points[i].lng);
+    for(let i=1;i<points.length;i++){
+      const seg = haversineKm(points[i-1].lat, points[i-1].lng, points[i].lat, points[i].lng);
+      if(seg < 5) total += seg; // GPS জাম্প বাদ
+    }
     return total;
   }
   function dayRangeMs(dateStr){
@@ -302,6 +306,9 @@
   }
   function isOutsideGeofence(lat, lng){
     return haversineKm(lat, lng, GEOFENCE.lat, GEOFENCE.lng) > GEOFENCE.radiusKm;
+  }
+  function esc(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
   async function loadTripForDate(uid, dateStr){
@@ -323,9 +330,8 @@
     renderAll();
   }
 
-  // ---------------- মার্কার ও কার্ড রেন্ডার ----------------
   function pinIcon(name, statusClass){
-    const initials = (name || '?').slice(0, 2);
+    const initials = esc((name || '?').slice(0, 2));
     return L.divIcon({
       html: '<div class="marker-pin ' + statusClass + '"><div class="marker-label">' + initials + '</div></div>',
       className: '', iconSize: [32, 32], iconAnchor: [16, 32]
@@ -356,20 +362,23 @@
     document.getElementById('newName').value = p.name || '';
     document.getElementById('newVehicle').value = p.vehicleNo || '';
     document.getElementById('newPhone').value = p.phone || '';
-    document.getElementById('authFields').style.display = 'none'; // এডিটে লগইন তথ্য বদলানো যাবে না
+    document.getElementById('authFields').style.display = 'none';
     document.getElementById('addDriverMsg').textContent = '';
     document.getElementById('driverModalOverlay').classList.add('show');
   }
 
   async function deleteDriver(uid){
     const name = (driverProfiles[uid] || {}).name || 'এই ড্রাইভার';
-    if(!confirm(name + ' কে মুছে ফেলতে চান? (লগইন অ্যাকাউন্ট Firebase Authentication-এ থেকে যাবে, শুধু প্রোফাইল ও লোকেশন ডেটা মুছবে — চাইলে ড্রাইভার আর লগইন করতে পারবে না কারণ প্রোফাইল খুঁজে পাবে না)')) return;
-    await db.ref('drivers/' + uid).remove();
-    await db.ref('liveDrivers/' + uid).remove();
-    await db.ref('tripHistory/' + uid).remove();
+    if(!confirm(name + ' কে মুছে ফেলতে চান? (প্রোফাইল ও লোকেশন ডেটা মুছবে, ড্রাইভার আর লগইন করতে পারবে না)')) return;
+    try{
+      await db.ref('drivers/' + uid).remove();
+      await db.ref('liveDrivers/' + uid).remove();
+      await db.ref('tripHistory/' + uid).remove();
+    }catch(e){ alert('মুছতে সমস্যা: ' + e.message); return; }
     delete driverProfiles[uid];
     delete liveData[uid];
     delete tripCache[uid];
+    delete alertState[uid];
     const card = document.getElementById('card-' + uid);
     if(card) card.remove();
     if(markers[uid]){ map.removeLayer(markers[uid]); delete markers[uid]; }
@@ -394,19 +403,22 @@
       card.className = 'driver-card';
       card.id = 'card-' + uid;
       driverListEl.appendChild(card);
+      card.addEventListener('click', () => {
+        if(markers[uid]){ map.setView(markers[uid].getLatLng(), 15); markers[uid].openPopup(); }
+      });
     }
     card.classList.toggle('speeding', isSpeeding);
-    card.classList.toggle('outside', outside);
+    card.classList.toggle('outside', !!outside);
 
     const phone = profile.phone;
-    const callBtn = phone ? '<a href="tel:' + phone + '">📞 কল</a>' : '<button disabled style="opacity:0.4;">📞 নম্বর নেই</button>';
+    const callBtn = phone ? '<a href="tel:' + esc(phone) + '">📞 কল</a>' : '<button disabled style="opacity:0.4;">📞 নম্বর নেই</button>';
     const batteryHtml = battery !== undefined && battery !== null
       ? '<div>ব্যাটারি: <b class="' + (lowBattery ? 'battery-low' : '') + '">' + battery + '%</b></div>' : '';
 
     card.innerHTML =
       '<div class="driver-top">' +
-        '<div><div class="driver-name">' + (profile.name || 'নাম নেই') + (outside ? '<span class="badge-outside">এলাকার বাইরে</span>' : '') + '</div>' +
-        '<div class="driver-vehicle">' + (profile.vehicleNo || '—') + '</div></div>' +
+        '<div><div class="driver-name">' + esc(profile.name || 'নাম নেই') + (outside ? '<span class="badge-outside">এলাকার বাইরে</span>' : '') + '</div>' +
+        '<div class="driver-vehicle">' + esc(profile.vehicleNo || '—') + '</div></div>' +
         '<div class="dot ' + dotClass + '"></div>' +
       '</div>' +
       '<div class="driver-stats">' +
@@ -425,20 +437,17 @@
     card.querySelector('.route-btn').addEventListener('click', (e) => { e.stopPropagation(); showRoute(uid); });
     card.querySelector('.edit-btn').addEventListener('click', (e) => { e.stopPropagation(); openEditDriver(uid); });
     card.querySelector('.delete-btn').addEventListener('click', (e) => { e.stopPropagation(); deleteDriver(uid); });
-    card.addEventListener('click', () => {
-      if(markers[uid]){ map.setView(markers[uid].getLatLng(), 15); markers[uid].openPopup(); }
-    });
 
     const matches = !searchTerm || (profile.name || '').toLowerCase().includes(searchTerm);
     card.style.display = matches ? 'block' : 'none';
 
-    // ---- এলার্ট (স্পিড / অফলাইন / জিওফেন্স) — শুধু অবস্থা বদলালে একবার বাজবে ----
     const prev = alertState[uid] || {};
     if(isSpeeding && !prev.wasSpeeding){
       beep(880, 0.3);
       notify('⚠ স্পিড লিমিট!', (profile.name || 'ড্রাইভার') + ' ' + speed.toFixed(0) + ' কিমি/ঘ. গতিতে চলছে');
     }
-    if(status === 'off' && prev.wasOffline !== true){
+    // যে ড্রাইভার আগে লাইভ ছিল এবং এখন অফলাইন হয়েছে, শুধু তখনই এলার্ট
+    if(status === 'off' && prev.wasOffline === false){
       beep(220, 0.4);
       notify('🔴 অফলাইন', (profile.name || 'ড্রাইভার') + ' এর লোকেশন আপডেট বন্ধ হয়ে গেছে');
     }
@@ -446,13 +455,13 @@
       beep(660, 0.3);
       notify('📍 এলাকার বাইরে', (profile.name || 'ড্রাইভার') + ' নির্ধারিত এলাকার বাইরে চলে গেছে');
     }
-    alertState[uid] = { wasSpeeding: isSpeeding, wasOffline: status === 'off', wasOutside: outside };
+    alertState[uid] = { wasSpeeding: isSpeeding, wasOffline: status === 'off', wasOutside: !!outside };
   }
 
   function renderMarker(uid){
     const profile = driverProfiles[uid] || {};
     const d = liveData[uid] || {};
-    if(!d.lat || !d.lng) return;
+    if(typeof d.lat !== 'number' || typeof d.lng !== 'number') return;
     const statusClass = markerStatusClass(uid);
     const latlng = [d.lat, d.lng];
     if(markers[uid]){
@@ -462,12 +471,13 @@
       markers[uid] = L.marker(latlng, { icon: pinIcon(profile.name, statusClass) }).addTo(map);
     }
     const isSpeeding = statusClass === 'speeding';
-    markers[uid].bindPopup(
-      '<div class="popup-title">' + (profile.name || 'নাম নেই') + '</div>' +
-      '<div class="popup-meta">' + (profile.vehicleNo || '—') + '<br>' +
+    const html =
+      '<div class="popup-title">' + esc(profile.name || 'নাম নেই') + '</div>' +
+      '<div class="popup-meta">' + esc(profile.vehicleNo || '—') + '<br>' +
       'গতি: ' + (d.speed || 0).toFixed(0) + ' কিমি/ঘ.' + (isSpeeding ? ' ⚠ স্পিড লিমিট পার!' : '') + '<br>' +
-      timeAgo(d.updatedAt) + '</div>'
-    );
+      timeAgo(d.updatedAt) + '</div>';
+    if(markers[uid].getPopup()) markers[uid].setPopupContent(html);
+    else markers[uid].bindPopup(html);
   }
 
   function renderAll(){
@@ -483,20 +493,24 @@
     summaryEl.textContent = live + ' / ' + total + ' জন লাইভ' + (speeding > 0 ? ' · ⚠ ' + speeding + ' জন স্পিড লিমিটে' : '');
 
     if(!hasFitBounds){
-      const coords = Object.values(liveData).filter(d => d.lat && d.lng).map(d => [d.lat, d.lng]);
-      if(coords.length > 0){ map.fitBounds(coords, { padding: [40,40] }); hasFitBounds = true; }
+      const coords = Object.values(liveData).filter(d => typeof d.lat === 'number' && typeof d.lng === 'number').map(d => [d.lat, d.lng]);
+      if(coords.length > 0){
+        map.invalidateSize();
+        map.fitBounds(coords, { padding: [40,40], maxZoom: 16 });
+        hasFitBounds = true;
+      }
     }
   }
 
   document.getElementById('searchInput').addEventListener('input', (e) => { searchTerm = e.target.value.trim().toLowerCase(); renderAll(); });
   document.getElementById('dateInput').value = selectedDateStr;
   document.getElementById('dateInput').addEventListener('change', (e) => {
+    if(!e.target.value) return;
     selectedDateStr = e.target.value;
     if(routeLine){ map.removeLayer(routeLine); routeLine = null; }
     loadAllTripsForSelectedDate();
   });
 
-  // ---------------- Add / Edit Driver Modal ----------------
   const driverModal = document.getElementById('driverModalOverlay');
   document.getElementById('addDriverBtn').addEventListener('click', () => {
     document.getElementById('driverModalTitle').textContent = 'নতুন ড্রাইভার';
@@ -521,16 +535,14 @@
     if(!name){ msg.textContent = 'নাম আবশ্যক।'; return; }
 
     if(uid){
-      // এডিট মোড — শুধু প্রোফাইল আপডেট
-      await db.ref('drivers/' + uid).update({ name, vehicleNo, phone });
-      driverProfiles[uid] = { ...driverProfiles[uid], name, vehicleNo, phone };
-      msg.textContent = '✅ আপডেট হয়েছে!';
-      renderAll();
-      setTimeout(() => driverModal.classList.remove('show'), 800);
+      try{
+        await db.ref('drivers/' + uid).update({ name, vehicleNo, phone });
+        msg.textContent = '✅ আপডেট হয়েছে!';
+        setTimeout(() => driverModal.classList.remove('show'), 800);
+      }catch(e){ msg.textContent = '❌ ' + e.message; }
       return;
     }
 
-    // নতুন ড্রাইভার মোড — Firebase Auth অ্যাকাউন্ট + প্রোফাইল (ফোন নম্বরই লগইন আইডি)
     const password = document.getElementById('newPassword').value;
     const phoneDigits = phone.replace(/\D/g, '');
     if(phoneDigits.length < 8){ msg.textContent = 'সঠিক ফোন নম্বর দিন — এটাই ড্রাইভারের লগইন আইডি হবে।'; return; }
@@ -555,7 +567,6 @@
     }
   });
 
-  // ---------------- Add Manager Modal ----------------
   const managerModal = document.getElementById('managerModalOverlay');
   document.getElementById('addManagerBtn').addEventListener('click', () => managerModal.classList.add('show'));
   document.getElementById('cancelManagerBtn').addEventListener('click', () => managerModal.classList.remove('show'));
@@ -581,7 +592,6 @@
     }
   });
 
-  // ---------------- Report Modal (সাপ্তাহিক চার্ট + CSV) ----------------
   let chartInstance = null;
   const reportModal = document.getElementById('reportModal');
 
@@ -596,7 +606,7 @@
     for(let i = 6; i >= 0; i--){
       const d = new Date();
       d.setDate(d.getDate() - i);
-      days.push(d.toISOString().slice(0,10));
+      days.push(localDateStr(d));
     }
     const uids = Object.keys(driverProfiles);
     const perDriverTotal = {};
@@ -614,7 +624,7 @@
       const byDay = {};
       days.forEach(d => byDay[d] = []);
       points.sort((a,b) => a.timestamp - b.timestamp).forEach(p => {
-        const dayStr = new Date(p.timestamp).toISOString().slice(0,10);
+        const dayStr = localDateStr(new Date(p.timestamp));
         if(byDay[dayStr]) byDay[dayStr].push(p);
       });
 
@@ -627,7 +637,6 @@
       perDriverTotal[uid] = uidTotal;
     }));
 
-    // চার্ট আঁকা
     const ctx = document.getElementById('reportChart').getContext('2d');
     if(chartInstance) chartInstance.destroy();
     chartInstance = new Chart(ctx, {
@@ -640,28 +649,31 @@
         scales: { x: { ticks: { color: '#8CA0BE' } }, y: { ticks: { color: '#8CA0BE' } } } }
     });
 
-    // টেবিল
     const tbody = document.getElementById('reportTableBody');
     tbody.innerHTML = '';
     uids.forEach(uid => {
       const tr = document.createElement('tr');
-      tr.innerHTML = '<td>' + ((driverProfiles[uid]||{}).name || '—') + '</td><td>' + (perDriverTotal[uid]||0).toFixed(1) + ' কিমি</td>';
+      tr.innerHTML = '<td>' + esc((driverProfiles[uid]||{}).name || '—') + '</td><td>' + (perDriverTotal[uid]||0).toFixed(1) + ' কিমি</td>';
       tbody.appendChild(tr);
     });
 
     weeklyCache = { days, perDriverTotal };
   }
 
+  function csvCell(v){
+    v = String(v == null ? '' : v);
+    return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  }
   document.getElementById('exportCsvBtn').addEventListener('click', () => {
-    let csv = 'Driver,Vehicle,Selected Date Distance (km),Status,Last Update\n';
+    let csv = '\uFEFFDriver,Vehicle,Selected Date Distance (km),Status,Last Update\n';
     Object.keys(driverProfiles).forEach(uid => {
       const p = driverProfiles[uid];
       const d = liveData[uid] || {};
       const dist = distanceFromPoints(tripCache[uid]).toFixed(1);
       const status = statusOf(d.updatedAt);
-      csv += [p.name || '', p.vehicleNo || '', dist, status, d.updatedAt ? new Date(d.updatedAt).toLocaleString() : ''].join(',') + '\n';
+      csv += [p.name || '', p.vehicleNo || '', dist, status, d.updatedAt ? new Date(d.updatedAt).toLocaleString() : ''].map(csvCell).join(',') + '\n';
     });
-    const blob = new Blob([csv], { type: 'text/csv' });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = 'fleet-report-' + selectedDateStr + '.csv';
@@ -669,7 +681,6 @@
     URL.revokeObjectURL(url);
   });
 
-  // ---------------- Firebase init + Auth (Manager Login Gate) ----------------
   try{
     firebase.initializeApp(firebaseConfig);
     auth = firebase.auth();
@@ -689,7 +700,7 @@
       const cred = await auth.signInWithEmailAndPassword(email, password);
       const uid = cred.user.uid;
 
-      // Bootstrap: যদি এখনো কোনো ম্যানেজার নিবন্ধিত না থাকে, তাহলে প্রথম সফল লগইনকারীই প্রথম ম্যানেজার হবেন
+      // যদি এখনো কোনো ম্যানেজার না থাকে, প্রথম সফল লগইনকারীই প্রথম ম্যানেজার
       const managersSnap = await db.ref('managers').once('value');
       const managersVal = managersSnap.val();
       if(!managersVal){
@@ -702,6 +713,10 @@
 
       document.getElementById('loginGate').classList.add('hidden');
       document.getElementById('app').classList.add('show');
+      // #app আগে display:none ছিল, তাই Leaflet-কে নতুন সাইজ জানানো জরুরি
+      map.invalidateSize();
+      setTimeout(() => map.invalidateSize(), 100);
+      setTimeout(() => map.invalidateSize(), 500);
       startDashboard();
     }catch(err){
       console.error(err);
@@ -714,8 +729,14 @@
       Notification.requestPermission();
     }
 
-    db.ref('drivers').on('value', (snap) => { driverProfiles = snap.val() || {}; loadAllTripsForSelectedDate(); });
-    db.ref('liveDrivers').on('value', (snap) => { liveData = snap.val() || {}; renderAll(); });
+    db.ref('drivers').on('value',
+      (snap) => { driverProfiles = snap.val() || {}; loadAllTripsForSelectedDate(); },
+      (err) => { console.error(err); alert('drivers পড়া যাচ্ছে না: ' + err.message); }
+    );
+    db.ref('liveDrivers').on('value',
+      (snap) => { liveData = snap.val() || {}; renderAll(); },
+      (err) => { console.error(err); alert('liveDrivers পড়া যাচ্ছে না: ' + err.message); }
+    );
     setInterval(renderAll, 15000);
   }
 </script>
