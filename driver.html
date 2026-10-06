@@ -2,289 +2,178 @@
 <html lang="bn">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>ড্রাইভার লোকেশন শেয়ার</title>
-
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>MY Power - Driver</title>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
-
-  :root{
-    --bg:#0F172A;
-    --surface:#16213A;
-    --surface-2:#1E293B;
-    --accent:#F59E0B;
-    --text:#E2E8F0;
-    --text-muted:#8CA0BE;
-    --on:#10B981;
-    --off:#EF4444;
-    --border: rgba(148,163,184,0.15);
-  }
-
-  *{box-sizing:border-box;}
-  html,body{height:100%;margin:0;}
-  body{
-    background:radial-gradient(ellipse at top, #16213A 0%, #0F172A 60%);
-    color:var(--text);
-    font-family:'Inter',sans-serif;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    padding:20px;
-  }
-
-  .card{
-    width:100%;
-    max-width:420px;
-    background:var(--surface);
-    border:1px solid var(--border);
-    border-radius:20px;
-    padding:32px 28px;
-    box-shadow:0 20px 60px rgba(0,0,0,0.4);
-  }
-
-  .eyebrow{
-    font-family:'JetBrains Mono',monospace;
-    font-size:12px;
-    letter-spacing:0.14em;
-    color:var(--accent);
-    text-transform:uppercase;
-    margin-bottom:6px;
-  }
-
-  h1{
-    font-family:'Barlow Condensed',sans-serif;
-    font-weight:700;
-    font-size:32px;
-    letter-spacing:0.01em;
-    margin:0 0 24px 0;
-    text-transform:uppercase;
-  }
-
-  label{
-    display:block;
-    font-size:13px;
-    color:var(--text-muted);
-    margin-bottom:8px;
-  }
-
-  select{
-    width:100%;
-    background:var(--surface-2);
-    border:1px solid var(--border);
-    color:var(--text);
-    padding:14px;
-    border-radius:10px;
-    font-size:16px;
-    font-family:'Inter',sans-serif;
-    margin-bottom:20px;
-    appearance:none;
-    -webkit-appearance:none;
-  }
-
-  select:focus, button:focus-visible{
-    outline:2px solid var(--accent);
-    outline-offset:2px;
-  }
-
-  button{
-    width:100%;
-    padding:16px;
-    border:none;
-    border-radius:12px;
-    font-family:'Barlow Condensed',sans-serif;
-    font-weight:700;
-    font-size:20px;
-    letter-spacing:0.03em;
-    text-transform:uppercase;
-    cursor:pointer;
-    transition:transform 0.15s ease, opacity 0.15s ease;
-  }
-
-  button:active{ transform:scale(0.98); }
-
-  #startBtn{ background:var(--accent); color:#1A1200; }
-  #stopBtn{ background:transparent; border:1px solid var(--off); color:var(--off); display:none; }
-
-  .status-row{
-    margin-top:24px;
-    padding-top:20px;
-    border-top:1px solid var(--border);
-    display:flex;
-    align-items:center;
-    gap:10px;
-  }
-
-  .dot{
-    width:10px;height:10px;border-radius:50%;
-    background:var(--text-muted);
-    flex-shrink:0;
-  }
-  .dot.live{
-    background:var(--on);
-    box-shadow:0 0 0 0 rgba(16,185,129,0.6);
-    animation:pulse 1.6s infinite;
-  }
-  @keyframes pulse{
-    0%{box-shadow:0 0 0 0 rgba(16,185,129,0.55);}
-    70%{box-shadow:0 0 0 10px rgba(16,185,129,0);}
-    100%{box-shadow:0 0 0 0 rgba(16,185,129,0);}
-  }
-
-  #statusText{ font-size:14px; color:var(--text-muted); }
-
-  .coords{
-    margin-top:16px;
-    font-family:'JetBrains Mono',monospace;
-    font-size:13px;
-    color:var(--text-muted);
-    line-height:1.7;
-  }
-  .coords span{ color:var(--text); }
-
-  .setup-note{
-    margin-top:20px;
-    font-size:12px;
-    color:var(--off);
-    line-height:1.6;
-    display:none;
-  }
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#0f172a;color:white;min-height:100vh;display:flex;justify-content:center;align-items:center}.card{width:92%;max-width:400px;background:#1e293b;padding:25px;border-radius:20px;box-shadow:0 15px 40px rgba(0,0,0,.4)}h2{text-align:center}input{width:100%;padding:14px;margin-top:10px;border:0;border-radius:10px;background:#334155;color:white;font-size:16px}button{width:100%;padding:14px;margin-top:15px;border:0;border-radius:10px;font-size:16px;font-weight:bold;cursor:pointer}#loginBtn{background:#22c55e;color:white}#logoutBtn{background:#ef4444;color:white}.info{margin-top:20px;background:#0f172a;padding:15px;border-radius:12px}.row{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #334155}.green{color:#22c55e}.red{color:#ef4444}#driverPanel{display:none}#message{margin-top:15px;text-align:center}
 </style>
 </head>
 <body>
-
 <div class="card">
-  <div class="eyebrow">ফ্লিট ট্র্যাকার · ড্রাইভার</div>
-  <h1>লোকেশন শেয়ার</h1>
-
-  <label for="driverSelect">আপনার নাম নির্বাচন করুন</label>
-  <select id="driverSelect">
-    <option value="">— নির্বাচন করুন —</option>
-    <option value="driver1">ড্রাইভার ১</option>
-    <option value="driver2">ড্রাইভার ২</option>
-    <option value="driver3">ড্রাইভার ৩</option>
-    <option value="driver4">ড্রাইভার ৪</option>
-    <option value="driver5">ড্রাইভার ৫</option>
-    <option value="driver6">ড্রাইভার ৬</option>
-    <option value="driver7">ড্রাইভার ৭</option>
-    <option value="driver8">ড্রাইভার ৮</option>
-    <option value="driver9">ড্রাইভার ৯</option>
-    <option value="driver10">ড্রাইভার ১০</option>
-  </select>
-
-  <button id="startBtn">শেয়ার শুরু করুন</button>
-  <button id="stopBtn">শেয়ার বন্ধ করুন</button>
-
-  <div class="status-row">
-    <div class="dot" id="statusDot"></div>
-    <div id="statusText">বন্ধ আছে</div>
-  </div>
-
-  <div class="coords" id="coords"></div>
-
-  <div class="setup-note" id="setupNote">
-    ⚠ firebaseConfig এখনও বসানো হয়নি। এই ফাইলের নিচে script অংশে আপনার Firebase প্রজেক্টের কনফিগারেশন বসান।
-  </div>
+<div id="loginPanel">
+<h2>🚗 MY Power</h2>
+<input type="tel" id="phone" placeholder="ফোন নম্বর (যেমন: 01712345678)">
+<input type="password" id="password" placeholder="Password">
+<button id="loginBtn">Login</button>
+<div id="message"></div>
 </div>
-
+<div id="driverPanel">
+<h2>🚗 MY Power</h2>
+<div class="info" style="text-align:center;padding:30px 15px;">
+<div id="bigIcon" style="font-size:48px;margin-bottom:12px;">📍</div>
+<div id="status" style="font-size:17px;font-weight:bold;">চালু হচ্ছে...</div>
+</div>
+<button id="retryBtn" style="display:none;background:#f59e0b;color:#1A1200;">📍 লোকেশন চালু করুন</button>
+<button id="logoutBtn">Logout</button>
+</div>
+</div>
 <script>
-  // ================================================================
-  // এখানে আপনার নিজের Firebase প্রজেক্টের কনফিগারেশন বসান।
-  // Firebase Console (console.firebase.google.com) > Project Settings > General
-  // থেকে এই তথ্য পাবেন। এটা সম্পূর্ণ ফ্রি Spark plan-এ কাজ করবে।
-  // ================================================================
-  const firebaseConfig = {
-    apiKey: "AIzaSyBuu25ZYUGJWiayqzMTUavodF-rcMVFrCk",
-    authDomain: "t-eran-2d426.firebaseapp.com",
-    databaseURL: "https://t-eran-2d426-default-rtdb.asia-southeast1.firebasedatabase.app",
-    projectId: "t-eran-2d426",
-    storageBucket: "t-eran-2d426.firebasestorage.app",
-    messagingSenderId: "256100312636",
-    appId: "1:256100312636:web:5e2d234a8b9ffff2e20539",
-    measurementId: "G-PMC6W971RS"
-  };
-  // ================================================================
+const firebaseConfig={
+apiKey:"AIzaSyBuu25ZYUGJWiayqzMTUavodF-rcMVFrCk",
+authDomain:"t-eran-2d426.firebaseapp.com",
+databaseURL:"https://t-eran-2d426-default-rtdb.asia-southeast1.firebasedatabase.app",
+projectId:"t-eran-2d426",
+storageBucket:"t-eran-2d426.firebasestorage.app",
+messagingSenderId:"256100312636",
+appId:"1:256100312636:web:5e2d234a8b9ffff2e20539",
+measurementId:"G-PMC6W971RS"
+};
+firebase.initializeApp(firebaseConfig);
+const auth=firebase.auth(),db=firebase.database();
+let watchId=null,currentUser=null,latestBattery=null;
 
-  let db, watchId, driverId;
-  const startBtn = document.getElementById('startBtn');
-  const stopBtn = document.getElementById('stopBtn');
-  const statusDot = document.getElementById('statusDot');
-  const statusText = document.getElementById('statusText');
-  const coordsEl = document.getElementById('coords');
-  const driverSelect = document.getElementById('driverSelect');
-  const setupNote = document.getElementById('setupNote');
+const loginPanel=document.getElementById("loginPanel");
+const driverPanel=document.getElementById("driverPanel");
+const message=document.getElementById("message");
 
-  try{
-    if(firebaseConfig.apiKey.includes('PASTE')){
-      setupNote.style.display = 'block';
-      statusText.textContent = 'সেটআপ বাকি আছে';
-    } else {
-      firebase.initializeApp(firebaseConfig);
-      db = firebase.database();
-    }
-  }catch(e){
-    console.error(e);
-  }
+// ফোনের ব্যাটারি লেভেল (সাপোর্ট করলে) — Battery API সব ব্রাউজারে নেই, না থাকলে চুপচাপ বাদ যাবে
+if(navigator.getBattery){
+navigator.getBattery().then(battery=>{
+function refreshBattery(){ latestBattery=Math.round(battery.level*100); }
+refreshBattery();
+battery.addEventListener('levelchange',refreshBattery);
+battery.addEventListener('chargingchange',refreshBattery);
+});
+}
 
-  startBtn.addEventListener('click', () => {
-    driverId = driverSelect.value;
-    if(!driverId){
-      alert('আগে আপনার নাম নির্বাচন করুন।');
-      return;
-    }
-    if(!db){
-      alert('Firebase কনফিগারেশন এখনও বসানো হয়নি।');
-      return;
-    }
-    if(!navigator.geolocation){
-      alert('এই ব্রাউজারে লোকেশন সাপোর্ট নেই।');
-      return;
-    }
+// ব্রাউজার নোটিফিকেশন পারমিশন আগে থেকে চেয়ে রাখা হচ্ছে, যাতে GPS বন্ধ হলে জানানো যায়
+if('Notification' in window && Notification.permission === 'default'){
+Notification.requestPermission();
+}
+function notifyDriver(title, body){
+if('Notification' in window && Notification.permission === 'granted'){
+new Notification(title, { body });
+}
+}
 
-    driverSelect.disabled = true;
-    startBtn.style.display = 'none';
-    stopBtn.style.display = 'block';
-    statusDot.classList.add('live');
-    statusText.textContent = 'লাইভ শেয়ার হচ্ছে...';
+document.getElementById("loginBtn").addEventListener("click",async()=>{
+const phoneRaw=document.getElementById("phone").value.trim();
+const password=document.getElementById("password").value;
+if(!phoneRaw||!password){message.innerText="ফোন নম্বর এবং Password দিন";return}
+const phoneDigits=phoneRaw.replace(/\D/g,"");
+if(phoneDigits.length<8){message.innerText="সঠিক ফোন নম্বর দিন";return}
+const email=phoneDigits+"@teran.app"; // ফোন নম্বরকে Firebase লগইন আইডি হিসেবে ব্যবহার করা হচ্ছে
+try{
+message.innerText="Login হচ্ছে...";
+const result=await auth.signInWithEmailAndPassword(email,password);
+currentUser=result.user;
+loginPanel.style.display="none";
+driverPanel.style.display="block";
+loadDriverProfile();
+}catch(error){
+console.log(error);
+message.innerText="❌ ফোন নম্বর অথবা Password ভুল";
+}
+});
 
-    watchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        const { latitude, longitude, accuracy } = pos.coords;
-        db.ref('drivers/' + driverId).set({
-          lat: latitude,
-          lng: longitude,
-          accuracy: Math.round(accuracy),
-          updatedAt: Date.now(),
-          name: driverSelect.options[driverSelect.selectedIndex].text
-        });
-        coordsEl.innerHTML =
-          'অক্ষাংশ: <span>' + latitude.toFixed(6) + '</span><br>' +
-          'দ্রাঘিমাংশ: <span>' + longitude.toFixed(6) + '</span><br>' +
-          'নির্ভুলতা: <span>±' + Math.round(accuracy) + ' মি.</span>';
-      },
-      (err) => {
-        statusText.textContent = 'ত্রুটি: ' + err.message;
-        statusDot.classList.remove('live');
-      },
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
-    );
-  });
+async function loadDriverProfile(){
+const uid=currentUser.uid;
+try{
+const snapshot=await db.ref("drivers/"+uid).once("value");
+const data=snapshot.val();
+if(!data){
+alert("এই Driver-এর profile Firebase-এ পাওয়া যায়নি।");
+await auth.signOut(); return;
+}
+startLocation();
+}catch(error){console.log(error)}
+}
 
-  stopBtn.addEventListener('click', () => {
-    if(watchId) navigator.geolocation.clearWatch(watchId);
-    if(db && driverId){
-      db.ref('drivers/' + driverId + '/updatedAt').set(0);
-    }
-    driverSelect.disabled = false;
-    startBtn.style.display = 'block';
-    stopBtn.style.display = 'none';
-    statusDot.classList.remove('live');
-    statusText.textContent = 'বন্ধ আছে';
-    coordsEl.innerHTML = '';
-  });
+let wasOffline=false;
+
+function startLocation(){
+if(!navigator.geolocation){
+document.getElementById("bigIcon").innerText="❌";
+document.getElementById("status").innerText="এই ফোনে লোকেশন সাপোর্ট নেই";
+return;
+}
+document.getElementById("status").innerText="📍 লোকেশন চালু হচ্ছে...";
+watchId=navigator.geolocation.watchPosition(
+position=>updateLocation(position),
+error=>{
+console.log(error);
+document.getElementById("bigIcon").innerText="⚠️";
+document.getElementById("status").innerText="লোকেশন অন করুন";
+document.getElementById("retryBtn").style.display="block";
+if(!wasOffline){
+wasOffline=true;
+notifyDriver("📍 লোকেশন অন করুন","আপনার লোকেশন শেয়ার বন্ধ হয়ে গেছে। অনুগ্রহ করে ফোনের Location/GPS চালু করুন।");
+}
+},
+{enableHighAccuracy:true,maximumAge:5000,timeout:15000}
+);
+}
+
+async function updateLocation(position){
+if(!currentUser)return;
+const uid=currentUser.uid;
+const latitude=position.coords.latitude;
+const longitude=position.coords.longitude;
+let speed=position.coords.speed;
+if(speed===null||speed===undefined||speed<0)speed=0;
+else speed*=3.6;
+let heading=position.coords.heading;
+if(heading===null||heading===undefined)heading=0;
+const accuracy=position.coords.accuracy;
+const status=speed<1?"stopped":"moving";
+const now=Date.now();
+
+const liveData={
+lat:latitude,lng:longitude,
+speed:Number(speed.toFixed(1)),
+heading:Number(heading.toFixed(0)),
+accuracy:Number(accuracy.toFixed(1)),
+status:status,updatedAt:now
+};
+if(latestBattery!==null) liveData.battery=latestBattery;
+
+await db.ref("liveDrivers/"+uid).set(liveData);
+await db.ref("tripHistory/"+uid).push({
+lat:latitude,lng:longitude,
+speed:Number(speed.toFixed(1)),
+heading:Number(heading.toFixed(0)),
+timestamp:now
+});
+
+wasOffline=false;
+document.getElementById("retryBtn").style.display="none";
+document.getElementById("bigIcon").innerText=status==="moving"?"🟢":"🟡";
+document.getElementById("status").innerText=status==="moving"?"লোকেশন পাঠানো হচ্ছে":"অবস্থান করছে (লাইভ)";
+}
+
+document.getElementById("retryBtn").addEventListener("click",()=>{
+document.getElementById("status").innerText="📍 আবার চেষ্টা হচ্ছে...";
+startLocation();
+});
+
+document.getElementById("logoutBtn").addEventListener("click",async()=>{
+if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null}
+if(currentUser)await db.ref("liveDrivers/"+currentUser.uid).update({status:"offline",updatedAt:0});
+await auth.signOut();location.reload();
+});
 </script>
-
 </body>
 </html>
