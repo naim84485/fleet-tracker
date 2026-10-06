@@ -8,7 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <style>
-*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#0f172a;color:white;min-height:100vh;display:flex;justify-content:center;align-items:center}.card{width:92%;max-width:400px;background:#1e293b;padding:25px;border-radius:20px;box-shadow:0 15px 40px rgba(0,0,0,.4)}h2{text-align:center}input{width:100%;padding:14px;margin-top:10px;border:0;border-radius:10px;background:#334155;color:white;font-size:16px}button{width:100%;padding:14px;margin-top:15px;border:0;border-radius:10px;font-size:16px;font-weight:bold;cursor:pointer}#loginBtn{background:#22c55e;color:white}#logoutBtn{background:#ef4444;color:white}.info{margin-top:20px;background:#0f172a;padding:15px;border-radius:12px}.row{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #334155}.green{color:#22c55e}.red{color:#ef4444}#driverPanel{display:none}#message{margin-top:15px;text-align:center}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#0f172a;color:white;min-height:100vh;display:flex;justify-content:center;align-items:center}.card{width:92%;max-width:400px;background:#1e293b;padding:25px;border-radius:20px;box-shadow:0 15px 40px rgba(0,0,0,.4)}h2{text-align:center}input{width:100%;padding:14px;margin-top:10px;border:0;border-radius:10px;background:#334155;color:white;font-size:16px}button{width:100%;padding:14px;margin-top:15px;border:0;border-radius:10px;font-size:16px;font-weight:bold;cursor:pointer}#loginBtn{background:#22c55e;color:white}#logoutBtn{background:#ef4444;color:white}.info{margin-top:20px;background:#0f172a;padding:15px;border-radius:12px}#driverPanel{display:none}#message{margin-top:15px;text-align:center}
 </style>
 </head>
 <body>
@@ -44,28 +44,32 @@ measurementId:"G-PMC6W971RS"
 firebase.initializeApp(firebaseConfig);
 const auth=firebase.auth(),db=firebase.database();
 let watchId=null,currentUser=null,latestBattery=null;
+let lastHistoryAt=0;
 
 const loginPanel=document.getElementById("loginPanel");
 const driverPanel=document.getElementById("driverPanel");
 const message=document.getElementById("message");
+const bigIcon=document.getElementById("bigIcon");
+const statusEl=document.getElementById("status");
+const retryBtn=document.getElementById("retryBtn");
 
-// ফোনের ব্যাটারি লেভেল (সাপোর্ট করলে) — Battery API সব ব্রাউজারে নেই, না থাকলে চুপচাপ বাদ যাবে
+function setStatus(icon,text){bigIcon.innerText=icon;statusEl.innerText=text}
+
 if(navigator.getBattery){
 navigator.getBattery().then(battery=>{
 function refreshBattery(){ latestBattery=Math.round(battery.level*100); }
 refreshBattery();
 battery.addEventListener('levelchange',refreshBattery);
 battery.addEventListener('chargingchange',refreshBattery);
-});
+}).catch(()=>{});
 }
 
-// ব্রাউজার নোটিফিকেশন পারমিশন আগে থেকে চেয়ে রাখা হচ্ছে, যাতে GPS বন্ধ হলে জানানো যায়
 if('Notification' in window && Notification.permission === 'default'){
 Notification.requestPermission();
 }
 function notifyDriver(title, body){
 if('Notification' in window && Notification.permission === 'granted'){
-new Notification(title, { body });
+try{ new Notification(title, { body }); }catch(e){}
 }
 }
 
@@ -75,7 +79,7 @@ const password=document.getElementById("password").value;
 if(!phoneRaw||!password){message.innerText="ফোন নম্বর এবং Password দিন";return}
 const phoneDigits=phoneRaw.replace(/\D/g,"");
 if(phoneDigits.length<8){message.innerText="সঠিক ফোন নম্বর দিন";return}
-const email=phoneDigits+"@teran.app"; // ফোন নম্বরকে Firebase লগইন আইডি হিসেবে ব্যবহার করা হচ্ছে
+const email=phoneDigits+"@teran.app";
 try{
 message.innerText="Login হচ্ছে...";
 const result=await auth.signInWithEmailAndPassword(email,password);
@@ -85,7 +89,7 @@ driverPanel.style.display="block";
 loadDriverProfile();
 }catch(error){
 console.log(error);
-message.innerText="❌ ফোন নম্বর অথবা Password ভুল";
+message.innerText="❌ ফোন নম্বর অথবা Password ভুল ("+(error.code||"")+")";
 }
 });
 
@@ -95,35 +99,41 @@ try{
 const snapshot=await db.ref("drivers/"+uid).once("value");
 const data=snapshot.val();
 if(!data){
-alert("এই Driver-এর profile Firebase-এ পাওয়া যায়নি।");
-await auth.signOut(); return;
+alert("এই Driver-এর profile Firebase-এ পাওয়া যায়নি। ম্যানেজার পেজ থেকে '+ ড্রাইভার' দিয়ে আবার যোগ করুন।");
+await auth.signOut(); location.reload(); return;
 }
 startLocation();
-}catch(error){console.log(error)}
+}catch(error){
+console.log(error);
+setStatus("❌","প্রোফাইল পড়া যায়নি: "+error.message);
+alert("প্রোফাইল পড়া যায়নি: "+error.message);
+}
 }
 
 let wasOffline=false;
 
 function startLocation(){
 if(!navigator.geolocation){
-document.getElementById("bigIcon").innerText="❌";
-document.getElementById("status").innerText="এই ফোনে লোকেশন সাপোর্ট নেই";
+setStatus("❌","এই ফোনে লোকেশন সাপোর্ট নেই");
 return;
 }
-document.getElementById("status").innerText="📍 লোকেশন চালু হচ্ছে...";
+if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null}
+setStatus("📍","লোকেশন চালু হচ্ছে...");
 watchId=navigator.geolocation.watchPosition(
 position=>updateLocation(position),
 error=>{
 console.log(error);
-document.getElementById("bigIcon").innerText="⚠️";
-document.getElementById("status").innerText="লোকেশন অন করুন";
-document.getElementById("retryBtn").style.display="block";
+let text="লোকেশন অন করুন";
+if(error.code===1)text="লোকেশন পারমিশন দিন (Allow চাপুন)";
+else if(error.code===3)text="লোকেশন পেতে দেরি হচ্ছে, খোলা জায়গায় যান";
+setStatus("⚠️",text);
+retryBtn.style.display="block";
 if(!wasOffline){
 wasOffline=true;
 notifyDriver("📍 লোকেশন অন করুন","আপনার লোকেশন শেয়ার বন্ধ হয়ে গেছে। অনুগ্রহ করে ফোনের Location/GPS চালু করুন।");
 }
 },
-{enableHighAccuracy:true,maximumAge:5000,timeout:15000}
+{enableHighAccuracy:true,maximumAge:5000,timeout:30000}
 );
 }
 
@@ -136,7 +146,7 @@ let speed=position.coords.speed;
 if(speed===null||speed===undefined||speed<0)speed=0;
 else speed*=3.6;
 let heading=position.coords.heading;
-if(heading===null||heading===undefined)heading=0;
+if(heading===null||heading===undefined||isNaN(heading))heading=0;
 const accuracy=position.coords.accuracy;
 const status=speed<1?"stopped":"moving";
 const now=Date.now();
@@ -150,28 +160,39 @@ status:status,updatedAt:now
 };
 if(latestBattery!==null) liveData.battery=latestBattery;
 
+try{
 await db.ref("liveDrivers/"+uid).set(liveData);
+// ট্রিপ হিস্ট্রি প্রতি ৫ সেকেন্ডে একবার সেভ হবে (ডেটা কম জমবে)
+if(now-lastHistoryAt>=5000){
+lastHistoryAt=now;
 await db.ref("tripHistory/"+uid).push({
 lat:latitude,lng:longitude,
 speed:Number(speed.toFixed(1)),
 heading:Number(heading.toFixed(0)),
 timestamp:now
 });
-
-wasOffline=false;
-document.getElementById("retryBtn").style.display="none";
-document.getElementById("bigIcon").innerText=status==="moving"?"🟢":"🟡";
-document.getElementById("status").innerText=status==="moving"?"লোকেশন পাঠানো হচ্ছে":"অবস্থান করছে (লাইভ)";
+}
+}catch(err){
+console.error(err);
+setStatus("❌","সার্ভারে পাঠানো যায়নি: "+err.message);
+return;
 }
 
-document.getElementById("retryBtn").addEventListener("click",()=>{
-document.getElementById("status").innerText="📍 আবার চেষ্টা হচ্ছে...";
+wasOffline=false;
+retryBtn.style.display="none";
+setStatus(status==="moving"?"🟢":"🟡",status==="moving"?"লোকেশন পাঠানো হচ্ছে":"অবস্থান করছে (লাইভ)");
+}
+
+retryBtn.addEventListener("click",()=>{
+setStatus("📍","আবার চেষ্টা হচ্ছে...");
 startLocation();
 });
 
 document.getElementById("logoutBtn").addEventListener("click",async()=>{
 if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null}
+try{
 if(currentUser)await db.ref("liveDrivers/"+currentUser.uid).update({status:"offline",updatedAt:0});
+}catch(e){console.log(e)}
 await auth.signOut();location.reload();
 });
 </script>
