@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>T Eran - Manager Dashboard</title>
+<title>MY Power - Manager Dashboard</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -132,7 +132,7 @@
 <div id="app">
   <div id="sidebar">
     <div id="sidebar-header">
-      <div class="eyebrow">T Eran · ম্যানেজার</div>
+      <div class="eyebrow">MY Power · ম্যানেজার</div>
       <h1>লাইভ ফ্লিট</h1>
       <div id="summary">লোড হচ্ছে...</div>
       <div id="searchRow">
@@ -161,11 +161,9 @@
     <input id="newName" type="text" placeholder="যেমন: করিম উদ্দিন">
     <label>গাড়ির নম্বর</label>
     <input id="newVehicle" type="text" placeholder="যেমন: ঢাকা-মেট্রো-গ-১২৩৪">
-    <label>ফোন নম্বর (ঐচ্ছিক)</label>
-    <input id="newPhone" type="text" placeholder="01XXXXXXXXX">
+    <label>ফোন নম্বর (এটাই লগইন আইডি হবে)</label>
+    <input id="newPhone" type="tel" placeholder="01XXXXXXXXX">
     <div id="authFields">
-      <label>লগইন ইমেইল</label>
-      <input id="newEmail" type="email" placeholder="driver1@teran.com">
       <label>পাসওয়ার্ড</label>
       <input id="newPassword" type="text" placeholder="কমপক্ষে ৬ অক্ষর">
     </div>
@@ -506,7 +504,6 @@
     document.getElementById('newName').value = '';
     document.getElementById('newVehicle').value = '';
     document.getElementById('newPhone').value = '';
-    document.getElementById('newEmail').value = '';
     document.getElementById('newPassword').value = '';
     document.getElementById('authFields').style.display = 'block';
     document.getElementById('addDriverMsg').textContent = '';
@@ -533,11 +530,13 @@
       return;
     }
 
-    // নতুন ড্রাইভার মোড — Firebase Auth অ্যাকাউন্ট + প্রোফাইল
-    const email = document.getElementById('newEmail').value.trim();
+    // নতুন ড্রাইভার মোড — Firebase Auth অ্যাকাউন্ট + প্রোফাইল (ফোন নম্বরই লগইন আইডি)
     const password = document.getElementById('newPassword').value;
-    if(!email || !password){ msg.textContent = 'নাম, ইমেইল ও পাসওয়ার্ড আবশ্যক।'; return; }
+    const phoneDigits = phone.replace(/\D/g, '');
+    if(phoneDigits.length < 8){ msg.textContent = 'সঠিক ফোন নম্বর দিন — এটাই ড্রাইভারের লগইন আইডি হবে।'; return; }
+    if(!password){ msg.textContent = 'নাম, ফোন নম্বর ও পাসওয়ার্ড আবশ্যক।'; return; }
     if(password.length < 6){ msg.textContent = 'পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।'; return; }
+    const email = phoneDigits + '@teran.app';
 
     msg.textContent = 'তৈরি হচ্ছে...';
     const secondaryApp = firebase.initializeApp(firebaseConfig, 'Secondary-' + Date.now());
@@ -706,7 +705,7 @@
       startDashboard();
     }catch(err){
       console.error(err);
-      msg.textContent = '❌ ইমেইল/পাসওয়ার্ড ভুল অথবা অ্যাকাউন্ট নেই';
+      msg.textContent = '❌ লগইন ব্যর্থ: ' + (err.code || err.message || 'অজানা ত্রুটি');
     }
   });
 
