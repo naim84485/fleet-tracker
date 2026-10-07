@@ -223,8 +223,6 @@
   const OFFLINE_AFTER_MS = 5 * 60 * 1000;
   const SPEED_LIMIT_KMH = 80;
   const LOW_BATTERY_PCT = 20;
-  // গ্যারেজ/অফিসের কেন্দ্র বিন্দু ও ব্যাসার্ধ (কিমি)। নিজের অফিসের lat,lng বসান।
-  const GEOFENCE = { lat: 24.3745, lng: 88.6042, radiusKm: 25 };
 
   // স্থানীয় সময় অনুযায়ী তারিখ (UTC নয়), বাংলাদেশে রাত ১২টা-ভোর ৬টায় তারিখ ভুল হওয়া ঠেকায়
   function localDateStr(d){
@@ -241,13 +239,18 @@
   let alertState = {};
 
   const map = L.map('map').setView([24.3745, 88.6042], 12);
-  const streetLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
-    attribution: 'Tiles &copy; Esri', maxZoom: 19
-  }).addTo(map);
-  const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    attribution: 'Tiles &copy; Esri', maxZoom: 19
+  const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors', maxZoom: 19
   });
-  L.control.layers({ 'রাস্তা': streetLayer, 'স্যাটেলাইট': satelliteLayer }).addTo(map);
+  const streetLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Tiles &copy; Esri', maxZoom: 19, maxNativeZoom: 15
+  });
+  const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Tiles &copy; Esri', maxZoom: 19, maxNativeZoom: 17
+  });
+  // অনলাইন (https) লিংকে OpenStreetMap সবচেয়ে বিস্তারিত; ফাইল থেকে খুললে OSM ব্লক হয়, তাই Esri
+  (location.protocol === 'https:' ? osmLayer : streetLayer).addTo(map);
+  L.control.layers({ 'রাস্তা (OSM)': osmLayer, 'রাস্তা (Esri)': streetLayer, 'স্যাটেলাইট': satelliteLayer }).addTo(map);
   window.addEventListener('resize', () => map.invalidateSize());
 
   const driverListEl = document.getElementById('driver-list');
@@ -307,9 +310,6 @@
     const start = new Date(dateStr + 'T00:00:00');
     const end = new Date(dateStr + 'T23:59:59.999');
     return { start: start.getTime(), end: end.getTime() };
-  }
-  function isOutsideGeofence(lat, lng){
-    return haversineKm(lat, lng, GEOFENCE.lat, GEOFENCE.lng) > GEOFENCE.radiusKm;
   }
   function esc(s){
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -395,7 +395,6 @@
     const status = statusOf(d.updatedAt);
     const speed = d.speed || 0;
     const isSpeeding = status === 'on' && speed > SPEED_LIMIT_KMH;
-    const outside = status === 'on' && d.lat && d.lng && isOutsideGeofence(d.lat, d.lng);
     const dotClass = isSpeeding ? 'speeding' : status;
     const distanceKm = distanceFromPoints(tripCache[uid]).toFixed(1);
     const battery = d.battery;
@@ -408,11 +407,10 @@
       card.id = 'card-' + uid;
       driverListEl.appendChild(card);
       card.addEventListener('click', () => {
-        if(markers[uid]){ map.setView(markers[uid].getLatLng(), 15); markers[uid].openPopup(); }
+        if(markers[uid]){ map.setView(markers[uid].getLatLng(), 14); markers[uid].openPopup(); }
       });
     }
     card.classList.toggle('speeding', isSpeeding);
-    card.classList.toggle('outside', !!outside);
 
     const phone = profile.phone;
     const callBtn = phone ? '<a href="tel:' + esc(phone) + '">📞 কল</a>' : '<button disabled style="opacity:0.4;">📞 নম্বর নেই</button>';
@@ -421,7 +419,7 @@
 
     card.innerHTML =
       '<div class="driver-top">' +
-        '<div><div class="driver-name">' + esc(profile.name || 'নাম নেই') + (outside ? '<span class="badge-outside">এলাকার বাইরে</span>' : '') + '</div>' +
+        '<div><div class="driver-name">' + esc(profile.name || 'নাম নেই') + '</div>' +
         '<div class="driver-vehicle">' + esc(profile.vehicleNo || '—') + '</div></div>' +
         '<div class="dot ' + dotClass + '"></div>' +
       '</div>' +
@@ -455,11 +453,7 @@
       beep(220, 0.4);
       notify('🔴 অফলাইন', (profile.name || 'ড্রাইভার') + ' এর লোকেশন আপডেট বন্ধ হয়ে গেছে');
     }
-    if(outside && !prev.wasOutside){
-      beep(660, 0.3);
-      notify('📍 এলাকার বাইরে', (profile.name || 'ড্রাইভার') + ' নির্ধারিত এলাকার বাইরে চলে গেছে');
-    }
-    alertState[uid] = { wasSpeeding: isSpeeding, wasOffline: status === 'off', wasOutside: !!outside };
+    alertState[uid] = { wasSpeeding: isSpeeding, wasOffline: status === 'off' };
   }
 
   function renderMarker(uid){
@@ -500,7 +494,7 @@
       const coords = Object.values(liveData).filter(d => typeof d.lat === 'number' && typeof d.lng === 'number').map(d => [d.lat, d.lng]);
       if(coords.length > 0){
         map.invalidateSize();
-        map.fitBounds(coords, { padding: [40,40], maxZoom: 16 });
+        map.fitBounds(coords, { padding: [40,40], maxZoom: 13 });
         hasFitBounds = true;
       }
     }
