@@ -31,6 +31,13 @@
 </div>
 </div>
 <script>
+// ফাইল হিসেবে (content:// বা file://) খোলা হলে GPS কাজ করে না, তাই অনলাইন লিংকে পাঠিয়ে দেওয়া হচ্ছে
+const LIVE_URL="https://naim84485.github.io/fleet-tracker/";
+if(location.protocol!=="https:"&&location.hostname!=="localhost"&&location.hostname!=="127.0.0.1"){
+document.body.innerHTML='<div class="card" style="text-align:center"><h2>🚗 MY Power</h2><p>ফাইল থেকে খুললে লোকেশন কাজ করে না।<br>সঠিক লিংকে নেওয়া হচ্ছে...</p><a href="'+LIVE_URL+'" style="display:block;background:#22c55e;color:white;padding:14px;border-radius:10px;font-weight:bold;text-decoration:none;margin-top:15px">👉 এখানে চাপুন</a></div>';
+setTimeout(()=>{location.href=LIVE_URL},1500);
+throw new Error("redirecting to https");
+}
 const firebaseConfig={
 apiKey:"AIzaSyBuu25ZYUGJWiayqzMTUavodF-rcMVFrCk",
 authDomain:"t-eran-2d426.firebaseapp.com",
